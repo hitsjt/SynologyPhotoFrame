@@ -1,0 +1,382 @@
+<UserControl x:Class="SynologyPhotoFrame.Views.AlbumSelectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1024">
+
+    <Grid Background="{StaticResource PrimaryDarkBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{StaticResource SecondaryDarkBrush}" Padding="24,16"
+                BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Select Content"
+                           FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"
+                           VerticalAlignment="Center"/>
+
+                <!-- Tab Buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                            HorizontalAlignment="Center">
+                    <Button Content="Albums" Style="{StaticResource GhostButton}"
+                            Command="{Binding SelectTabCommand}"
+                            Margin="4,0"
+                            Opacity="{Binding SelectedTab, Converter={StaticResource EqualityToOpacityConverter}, ConverterParameter=0}">
+                        <Button.CommandParameter>
+                            <sys:Int32>0</sys:Int32>
+                        </Button.CommandParameter>
+                    </Button>
+                    <Button Content="People" Style="{StaticResource GhostButton}"
+                            Command="{Binding SelectTabCommand}"
+                            Margin="4,0"
+                            Opacity="{Binding SelectedTab, Converter={StaticResource EqualityToOpacityConverter}, ConverterParameter=1}">
+                        <Button.CommandParameter>
+                            <sys:Int32>1</sys:Int32>
+                        </Button.CommandParameter>
+                    </Button>
+                    <Button Content="Team People" Style="{StaticResource GhostButton}"
+                            Command="{Binding SelectTabCommand}"
+                            Margin="4,0"
+                            Opacity="{Binding SelectedTab, Converter={StaticResource EqualityToOpacityConverter}, ConverterParameter=2}">
+                        <Button.CommandParameter>
+                            <sys:Int32>2</sys:Int32>
+                        </Button.CommandParameter>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="&#x2699;" Style="{StaticResource GhostButton}"
+                            Click="OnSettingsClick" ToolTip="Settings"
+                            Margin="0,0,8,0"/>
+                    <Button Content="Logout"
+                            Style="{StaticResource GhostButton}"
+                            Command="{Binding LogoutCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Album List (Tab 0) -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      PanningMode="VerticalOnly"
+                      Visibility="{Binding SelectedTab, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=0}">
+            <ItemsControl ItemsSource="{Binding Albums}" Margin="0" SizeChanged="OnItemsControlSizeChanged">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource SecondaryDarkBrush}"
+                                CornerRadius="8" Margin="8"
+                                Width="200"
+                                Cursor="Hand"
+                                MouseLeftButtonUp="AlbumItem_Click"
+                                ClipToBounds="True"
+                                BorderBrush="#E2E8F0" BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="140"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <!-- Cover Image -->
+                                <Grid Grid.Row="0">
+                                    <Border CornerRadius="7,7,0,0" Background="#FFE2E8F0">
+                                        <TextBlock Text="&#x1F5BC;" FontSize="36"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="#20000000"/>
+                                    </Border>
+                                    <Border CornerRadius="7,7,0,0">
+                                        <Border.Background>
+                                            <ImageBrush ImageSource="{Binding CoverImage}" Stretch="UniformToFill"/>
+                                        </Border.Background>
+                                    </Border>
+                                </Grid>
+                                <!-- Info -->
+                                <StackPanel Grid.Row="1" Margin="12,10,12,10">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="15" Foreground="{StaticResource TextPrimaryBrush}"
+                                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                            <Run Text="{Binding ItemCount, Mode=OneWay}"/>
+                                            <Run Text=" photos"/>
+                                        </TextBlock>
+                                        <CheckBox IsChecked="{Binding IsSelected}"
+                                                  HorizontalAlignment="Right"
+                                                  Click="SelectionChanged"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- People List (Tab 1) -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      PanningMode="VerticalOnly"
+                      Visibility="{Binding SelectedTab, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=1}">
+            <ItemsControl ItemsSource="{Binding People}" Margin="0" SizeChanged="OnItemsControlSizeChanged">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource SecondaryDarkBrush}"
+                                CornerRadius="8" Margin="8"
+                                Width="200"
+                                Cursor="Hand"
+                                MouseLeftButtonUp="PersonItem_Click"
+                                ClipToBounds="True"
+                                BorderBrush="#E2E8F0" BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="140"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <!-- Cover Image -->
+                                <Grid Grid.Row="0">
+                                    <Border CornerRadius="7,7,0,0" Background="#FFE2E8F0">
+                                        <TextBlock Text="&#x1F464;" FontSize="36"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="#20000000"/>
+                                    </Border>
+                                    <Border CornerRadius="7,7,0,0">
+                                        <Border.Background>
+                                            <ImageBrush ImageSource="{Binding CoverImage}" Stretch="UniformToFill"/>
+                                        </Border.Background>
+                                    </Border>
+                                </Grid>
+                                <!-- Info -->
+                                <StackPanel Grid.Row="1" Margin="12,10,12,10">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="15" Foreground="{StaticResource TextPrimaryBrush}"
+                                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                            <Run Text="{Binding ItemCount, Mode=OneWay}"/>
+                                            <Run Text=" photos"/>
+                                        </TextBlock>
+                                        <CheckBox IsChecked="{Binding IsSelected}"
+                                                  HorizontalAlignment="Right"
+                                                  Click="SelectionChanged"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Team People List (Tab 2) -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      PanningMode="VerticalOnly"
+                      Visibility="{Binding SelectedTab, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=2}">
+            <ItemsControl ItemsSource="{Binding TeamPeople}" Margin="0" SizeChanged="OnItemsControlSizeChanged">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource SecondaryDarkBrush}"
+                                CornerRadius="8" Margin="8"
+                                Width="200"
+                                Cursor="Hand"
+                                MouseLeftButtonUp="PersonItem_Click"
+                                ClipToBounds="True"
+                                BorderBrush="#E2E8F0" BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="140"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <!-- Cover Image -->
+                                <Grid Grid.Row="0">
+                                    <Border CornerRadius="7,7,0,0" Background="#FFE2E8F0">
+                                        <TextBlock Text="&#x1F464;" FontSize="36"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="#20000000"/>
+                                    </Border>
+                                    <Border CornerRadius="7,7,0,0">
+                                        <Border.Background>
+                                            <ImageBrush ImageSource="{Binding CoverImage}" Stretch="UniformToFill"/>
+                                        </Border.Background>
+                                    </Border>
+                                </Grid>
+                                <!-- Info -->
+                                <StackPanel Grid.Row="1" Margin="12,10,12,10">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="15" Foreground="{StaticResource TextPrimaryBrush}"
+                                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                            <Run Text="{Binding ItemCount, Mode=OneWay}"/>
+                                            <Run Text=" photos"/>
+                                        </TextBlock>
+                                        <CheckBox IsChecked="{Binding IsSelected}"
+                                                  HorizontalAlignment="Right"
+                                                  Click="SelectionChanged"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Loading -->
+        <Grid Grid.Row="1" Background="#80F0F4F8"
+              Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}">
+            <TextBlock Text="Loading..." FontSize="24" Foreground="{StaticResource TextPrimaryBrush}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Error -->
+        <TextBlock Grid.Row="1" Text="{Binding ErrorMessage}"
+                   Foreground="#ff4444" FontSize="16"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisibilityConverter}}"/>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" Background="{StaticResource SecondaryDarkBrush}" Padding="24,16"
+                BorderBrush="#E2E8F0" BorderThickness="0,1,0,0">
+            <Grid>
+                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" FontSize="16">
+                    <Run Text="Selected: "/>
+                    <Run Text="{Binding SelectedCount, Mode=OneWay}"/>
+                    <Run Text=" items"/>
+                </TextBlock>
+                <Button Content="Start Slideshow"
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding StartSlideshowCommand}"
+                        HorizontalAlignment="Right"/>
+            </Grid>
+        </Border>
+
+        <!-- Settings Panel -->
+        <Grid x:Name="SettingsPanel" Grid.RowSpan="3" Visibility="Collapsed">
+            <Grid Background="#60000000" MouseLeftButtonDown="OnSettingsBackgroundClick"/>
+            <Border Background="{StaticResource SecondaryDarkBrush}"
+                    CornerRadius="16"
+                    MinWidth="480" MaxWidth="560"
+                    Margin="32"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Padding="32,28"
+                    BorderBrush="#E2E8F0" BorderThickness="1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Text="Settings" FontSize="22" FontWeight="Bold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,20"/>
+
+                        <!-- Playback Section -->
+                        <TextBlock Text="PLAYBACK" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,0,0,12"/>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Photo interval" Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="15" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="IntervalCombo" Grid.Column="1"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Transition effect" Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="15" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="TransitionCombo" Grid.Column="1"/>
+                        </Grid>
+
+                        <CheckBox x:Name="ShuffleCheck" Content="Shuffle photos" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="ClockCheck" Content="Show clock" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="PhotoInfoCheck" Content="Show photo info" Margin="0,0,0,4"/>
+
+                        <!-- Separator -->
+                        <Rectangle Height="1" Fill="#E2E8F0" Margin="0,16,0,16"/>
+
+                        <!-- Schedule Section -->
+                        <TextBlock Text="SCHEDULE" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,0,0,12"/>
+
+                        <CheckBox x:Name="ScheduleCheck" Content="Enable daily schedule" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Active hours" Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="15" VerticalAlignment="Center"/>
+                            <TextBox x:Name="StartTimeBox" Grid.Column="1" MaxLength="5"
+                                     MinWidth="80" HorizontalContentAlignment="Center"/>
+                            <TextBlock Grid.Column="3" Text="-" VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="18"
+                                       Margin="0,0,12,0"/>
+                            <TextBox x:Name="EndTimeBox" Grid.Column="4" MaxLength="5"
+                                     MinWidth="80" MaxWidth="80" HorizontalContentAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Separator -->
+                        <Rectangle Height="1" Fill="#E2E8F0" Margin="0,16,0,16"/>
+
+                        <!-- Storage Section -->
+                        <TextBlock Text="STORAGE" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,0,0,12"/>
+
+                        <TextBlock x:Name="CacheSizeText" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="14" Margin="0,0,0,8"/>
+                        <Button Content="Clear Cache" Style="{StaticResource GhostButton}"
+                                Click="OnClearCacheClick" HorizontalAlignment="Left"
+                                Margin="0,0,0,4"/>
+
+                        <!-- Separator -->
+                        <Rectangle Height="1" Fill="#E2E8F0" Margin="0,16,0,20"/>
+
+                        <!-- Buttons -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Cancel" Style="{StaticResource GhostButton}"
+                                    Margin="0,0,12,0" Click="OnSettingsCancelClick"/>
+                            <Button Content="Save" Style="{StaticResource PrimaryButton}"
+                                    Click="OnSettingsSaveClick"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

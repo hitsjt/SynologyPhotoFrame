@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SynologyPhotoFrame/SynologyPhotoFrame.csproj" />
+  </Folder>
+</Solution>
