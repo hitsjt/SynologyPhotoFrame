@@ -30,6 +30,12 @@ public partial class AlbumSelectionViewModel : ViewModelBase
     [ObservableProperty]
     private int _selectedCount;
 
+    [ObservableProperty]
+    private DateTime? _photoFilterStartDate;
+
+    [ObservableProperty]
+    private DateTime? _photoFilterEndDate;
+
     public AlbumSelectionViewModel(ISynologyApiService apiService, ISettingsService settingsService,
         INavigationService navigationService, IImageCacheService cacheService)
     {
@@ -53,6 +59,9 @@ public partial class AlbumSelectionViewModel : ViewModelBase
         try
         {
             var settings = await _settingsService.LoadAsync();
+
+            PhotoFilterStartDate = settings.PhotoFilterStartDate;
+            PhotoFilterEndDate = settings.PhotoFilterEndDate;
 
             var albums = await _apiService.GetAlbumsAsync(0, 500);
             Albums = new ObservableCollection<Album>(albums);
@@ -196,6 +205,8 @@ public partial class AlbumSelectionViewModel : ViewModelBase
         settings.SelectedAlbumIds = Albums.Where(a => a.IsSelected).Select(a => a.Id).ToList();
         settings.SelectedPersonIds = People.Where(p => p.IsSelected).Select(p => p.Id).ToList();
         settings.SelectedTeamPersonIds = TeamPeople.Where(p => p.IsSelected).Select(p => p.Id).ToList();
+        settings.PhotoFilterStartDate = PhotoFilterStartDate;
+        settings.PhotoFilterEndDate = PhotoFilterEndDate;
         await _settingsService.SaveAsync(settings);
 
         _navigationService.NavigateTo<SlideshowViewModel>();

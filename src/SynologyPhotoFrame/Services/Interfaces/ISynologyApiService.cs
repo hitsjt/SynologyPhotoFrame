@@ -12,9 +12,9 @@ public interface ISynologyApiService
     Task<List<Album>> GetAlbumsAsync(int offset = 0, int limit = 100);
     Task<List<Person>> GetPeopleAsync(int offset = 0, int limit = 100);
     Task<List<Person>> GetTeamPeopleAsync(int offset = 0, int limit = 100);
-    Task<List<PhotoItem>> GetAlbumPhotosAsync(int albumId, int offset = 0, int limit = 500);
-    Task<List<PhotoItem>> GetPersonPhotosAsync(int personId, int offset = 0, int limit = 500);
-    Task<List<PhotoItem>> GetTeamPersonPhotosAsync(int personId, int offset = 0, int limit = 500);
+    Task<List<PhotoItem>> GetAlbumPhotosAsync(int albumId, int offset = 0, int limit = 500, long? startTime = null, long? endTime = null);
+    Task<List<PhotoItem>> GetPersonPhotosAsync(int personId, int offset = 0, int limit = 500, long? startTime = null, long? endTime = null);
+    Task<List<PhotoItem>> GetTeamPersonPhotosAsync(int personId, int offset = 0, int limit = 500, long? startTime = null, long? endTime = null);
     Task<byte[]?> GetThumbnailAsync(int photoId, string cacheKey, string size = "xl", string type = "unit");
     Task<byte[]?> DownloadPhotoAsync(int photoId, string cacheKey);
 }

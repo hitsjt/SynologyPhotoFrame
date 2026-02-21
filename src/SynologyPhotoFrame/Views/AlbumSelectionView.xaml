@@ -265,15 +265,35 @@
         <Border Grid.Row="2" Background="{StaticResource SecondaryDarkBrush}" Padding="24,16"
                 BorderBrush="#E2E8F0" BorderThickness="0,1,0,0">
             <Grid>
-                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" FontSize="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" FontSize="16">
                     <Run Text="Selected: "/>
                     <Run Text="{Binding SelectedCount, Mode=OneWay}"/>
                     <Run Text=" items"/>
                 </TextBlock>
-                <Button Content="Start Slideshow"
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="From" Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <DatePicker SelectedDate="{Binding PhotoFilterStartDate, Mode=TwoWay}"
+                                MinWidth="130" FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Text="-" Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="18" VerticalAlignment="Center" Margin="12,0"/>
+                    <TextBlock Text="To" Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <DatePicker SelectedDate="{Binding PhotoFilterEndDate, Mode=TwoWay}"
+                                MinWidth="130" FontSize="14" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <Button Grid.Column="2" Content="Start Slideshow"
                         Style="{StaticResource PrimaryButton}"
-                        Command="{Binding StartSlideshowCommand}"
-                        HorizontalAlignment="Right"/>
+                        Command="{Binding StartSlideshowCommand}"/>
             </Grid>
         </Border>
 

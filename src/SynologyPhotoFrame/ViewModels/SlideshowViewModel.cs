@@ -88,6 +88,14 @@ public partial class SlideshowViewModel : ViewModelBase
         CurrentTransition = _settings.TransitionType;
         TransitionDurationSeconds = _settings.TransitionDurationSeconds;
 
+        // Convert date filter to Unix timestamps for API
+        var startTime = _settings.PhotoFilterStartDate.HasValue
+            ? new DateTimeOffset(_settings.PhotoFilterStartDate.Value.Date).ToUnixTimeSeconds()
+            : (long?)null;
+        var endTime = _settings.PhotoFilterEndDate.HasValue
+            ? new DateTimeOffset(_settings.PhotoFilterEndDate.Value.Date.AddDays(1).AddSeconds(-1)).ToUnixTimeSeconds()
+            : (long?)null;
+
         IsLoading = true;
         LoadingProgress = "Loading photos...";
 
@@ -97,13 +105,13 @@ public partial class SlideshowViewModel : ViewModelBase
             var firstBatchTasks = new List<Task<List<PhotoItem>>>();
 
             foreach (var albumId in _settings.SelectedAlbumIds)
-                firstBatchTasks.Add(_apiService.GetAlbumPhotosAsync(albumId, 0, 500));
+                firstBatchTasks.Add(_apiService.GetAlbumPhotosAsync(albumId, 0, 500, startTime, endTime));
 
             foreach (var personId in _settings.SelectedPersonIds)
-                firstBatchTasks.Add(_apiService.GetPersonPhotosAsync(personId, 0, 500));
+                firstBatchTasks.Add(_apiService.GetPersonPhotosAsync(personId, 0, 500, startTime, endTime));
 
             foreach (var personId in _settings.SelectedTeamPersonIds)
-                firstBatchTasks.Add(_apiService.GetTeamPersonPhotosAsync(personId, 0, 500));
+                firstBatchTasks.Add(_apiService.GetTeamPersonPhotosAsync(personId, 0, 500, startTime, endTime));
 
             var results = await Task.WhenAll(firstBatchTasks);
 
@@ -181,21 +189,29 @@ public partial class SlideshowViewModel : ViewModelBase
     {
         _isBackgroundLoading = true;
 
+        // Convert date filter to Unix timestamps for API
+        var startTime = _settings.PhotoFilterStartDate.HasValue
+            ? new DateTimeOffset(_settings.PhotoFilterStartDate.Value.Date).ToUnixTimeSeconds()
+            : (long?)null;
+        var endTime = _settings.PhotoFilterEndDate.HasValue
+            ? new DateTimeOffset(_settings.PhotoFilterEndDate.Value.Date.AddDays(1).AddSeconds(-1)).ToUnixTimeSeconds()
+            : (long?)null;
+
         try
         {
             var tasks = new List<Task>();
 
             foreach (var albumId in _settings.SelectedAlbumIds)
                 tasks.Add(LoadRemainingFromSourceAsync(
-                    (offset, limit) => _apiService.GetAlbumPhotosAsync(albumId, offset, limit)));
+                    (offset, limit) => _apiService.GetAlbumPhotosAsync(albumId, offset, limit, startTime, endTime)));
 
             foreach (var personId in _settings.SelectedPersonIds)
                 tasks.Add(LoadRemainingFromSourceAsync(
-                    (offset, limit) => _apiService.GetPersonPhotosAsync(personId, offset, limit)));
+                    (offset, limit) => _apiService.GetPersonPhotosAsync(personId, offset, limit, startTime, endTime)));
 
             foreach (var personId in _settings.SelectedTeamPersonIds)
                 tasks.Add(LoadRemainingFromSourceAsync(
-                    (offset, limit) => _apiService.GetTeamPersonPhotosAsync(personId, offset, limit)));
+                    (offset, limit) => _apiService.GetTeamPersonPhotosAsync(personId, offset, limit, startTime, endTime)));
 
             await Task.WhenAll(tasks);
         }
@@ -284,8 +300,7 @@ public partial class SlideshowViewModel : ViewModelBase
             if (IsSchedulePaused)
             {
                 IsSchedulePaused = false;
-                PowerHelper.CancelWakeTimer();
-                PowerHelper.PreventSleep();
+                PowerHelper.ActivateDisplay();
             }
             return;
         }
@@ -301,22 +316,15 @@ public partial class SlideshowViewModel : ViewModelBase
 
         if (!inSchedule && !IsSchedulePaused)
         {
+            // Entering inactive period: dim and turn off display
             IsSchedulePaused = true;
-
-            // Calculate next wake time (start time today or tomorrow)
-            var wakeTime = DateTime.Today.Add(start);
-            if (wakeTime <= DateTime.Now)
-                wakeTime = wakeTime.AddDays(1);
-
-            // Set wake timer and put system to sleep
-            PowerHelper.ScheduleWakeAndSleep(wakeTime.ToUniversalTime());
+            PowerHelper.DeactivateDisplay();
         }
         else if (inSchedule && IsSchedulePaused)
         {
+            // Entering active period: turn on and brighten display
             IsSchedulePaused = false;
-            PowerHelper.CancelWakeTimer();
-            PowerHelper.TurnOnDisplay();
-            PowerHelper.PreventSleep();
+            PowerHelper.ActivateDisplay();
         }
     }
 
@@ -439,6 +447,13 @@ public partial class SlideshowViewModel : ViewModelBase
         _slideshowTimer?.Stop();
         _overlayTimer?.Stop();
         _clockTimer?.Stop();
+
+        if (IsSchedulePaused)
+        {
+            PowerHelper.TurnOnDisplay();
+            PowerHelper.SetBrightness(100);
+        }
+
         PowerHelper.AllowSleep();
     }
 

@@ -21,4 +21,6 @@ public class AppSettings
     public bool ScheduleEnabled { get; set; }
     public string ScheduleStartTime { get; set; } = "08:00";
     public string ScheduleEndTime { get; set; } = "22:00";
+    public DateTime? PhotoFilterStartDate { get; set; }
+    public DateTime? PhotoFilterEndDate { get; set; }
 }

@@ -102,15 +102,19 @@ services.AddTransient<SettingsViewModel>();
 
 ### Daily Schedule
 - Set active hours (start/end time, supports midnight crossing)
-- At end time: set waitable timer for wake, then system sleeps
-- At start time: system wakes, display turns on, slideshow resumes
-- Lock screen disabled on wake via `powercfg` (requires admin)
+- At end time: brightness set to 0, display turned off, slideshow paused
+- At start time: display turned on, brightness set to 100%, slideshow resumes
+- System stays awake 24/7 (no sleep/wake cycle)
+- Lock screen disabled via `powercfg` (requires admin)
 
 ### Power Management (P/Invoke)
-- `PreventSleep()` — `SetThreadExecutionState` during playback
-- `AllowSleep()` — Release on pause/exit
-- `ScheduleWakeAndSleep()` — `CreateWaitableTimer` + `SetSuspendState`
-- `TurnOnDisplay()` — `SendMessage` `SC_MONITORPOWER`
+- `PreventSleep()` — `SetThreadExecutionState` (system + display) during active playback
+- `PreventSleepKeepSystemOn()` — `SetThreadExecutionState` (system only) during inactive schedule
+- `AllowSleep()` — Release on exit
+- `TurnOnDisplay()` / `TurnOffDisplay()` — `SendMessage` `SC_MONITORPOWER`
+- `SetBrightness(int)` — WMI (integrated panels) + DXVA2 DDC/CI (external monitors)
+- `ActivateDisplay()` — Composite: PreventSleep + TurnOn + Brightness 100%
+- `DeactivateDisplay()` — Composite: PreventSleepKeepSystemOn + Brightness 0 + TurnOff
 - `DisableLockOnWake()` — `powercfg CONSOLELOCK 0`
 
 ### Image Cache
@@ -128,9 +132,9 @@ Base URL: `https://{nasAddress}:{port}/webapi`
 | List Albums | `SYNO.Foto.Browse.Album` | list |
 | List People | `SYNO.Foto.Browse.Person` | list |
 | List Team People | `SYNO.FotoTeam.Browse.Person` | list |
-| Album Photos | `SYNO.Foto.Browse.Item` | list (v1, album_id) |
-| Person Photos | `SYNO.Foto.Browse.Item` | list (v4, person_id) |
-| Team Person Photos | `SYNO.FotoTeam.Browse.Item` | list (v4, person_id) |
+| Album Photos | `SYNO.Foto.Browse.Item` | list (v1, album_id, start_time?, end_time?) |
+| Person Photos | `SYNO.Foto.Browse.Item` | list (v4, person_id, start_time?, end_time?) |
+| Team Person Photos | `SYNO.FotoTeam.Browse.Item` | list (v4, person_id, start_time?, end_time?) |
 | Thumbnail | `SYNO.Foto.Thumbnail` | get (size: sm/m/xl) |
 | Download | `SYNO.Foto.Download` | download (unit_id) |
 
@@ -160,7 +164,9 @@ Stored at `%APPDATA%\SynologyPhotoFrame\settings.json`:
   "photoSizePreference": "xl",
   "scheduleEnabled": false,
   "scheduleStartTime": "08:00",
-  "scheduleEndTime": "22:00"
+  "scheduleEndTime": "22:00",
+  "photoFilterStartDate": "2025-01-01T00:00:00",
+  "photoFilterEndDate": null
 }
 ```
 

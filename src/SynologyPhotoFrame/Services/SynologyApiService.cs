@@ -230,7 +230,7 @@ public class SynologyApiService : ISynologyApiService
         return JsonSerializer.Deserialize<List<Person>>(list.GetRawText()) ?? new List<Person>();
     }
 
-    public async Task<List<PhotoItem>> GetAlbumPhotosAsync(int albumId, int offset = 0, int limit = 500)
+    public async Task<List<PhotoItem>> GetAlbumPhotosAsync(int albumId, int offset = 0, int limit = 500, long? startTime = null, long? endTime = null)
     {
         var parameters = new Dictionary<string, string>
         {
@@ -244,6 +244,9 @@ public class SynologyApiService : ISynologyApiService
             ["additional"] = "[\"thumbnail\",\"resolution\",\"orientation\"]"
         };
 
+        if (startTime.HasValue) parameters["start_time"] = startTime.Value.ToString();
+        if (endTime.HasValue) parameters["end_time"] = endTime.Value.ToString();
+
         var data = await PostApiAsync(parameters);
         if (data == null) return new List<PhotoItem>();
 
@@ -251,7 +254,7 @@ public class SynologyApiService : ISynologyApiService
         return JsonSerializer.Deserialize<List<PhotoItem>>(list.GetRawText()) ?? new List<PhotoItem>();
     }
 
-    public async Task<List<PhotoItem>> GetPersonPhotosAsync(int personId, int offset = 0, int limit = 500)
+    public async Task<List<PhotoItem>> GetPersonPhotosAsync(int personId, int offset = 0, int limit = 500, long? startTime = null, long? endTime = null)
     {
         // Use SYNO.Foto.Browse.Item method=list with person_id parameter (version 4)
         // This matches the actual Synology Photos web UI API format
@@ -266,6 +269,9 @@ public class SynologyApiService : ISynologyApiService
             ["additional"] = "[\"thumbnail\",\"resolution\",\"orientation\"]"
         };
 
+        if (startTime.HasValue) parameters["start_time"] = startTime.Value.ToString();
+        if (endTime.HasValue) parameters["end_time"] = endTime.Value.ToString();
+
         var data = await PostApiAsync(parameters);
         if (data != null && data.Value.TryGetProperty("list", out var list))
         {
@@ -275,7 +281,7 @@ public class SynologyApiService : ISynologyApiService
         return new List<PhotoItem>();
     }
 
-    public async Task<List<PhotoItem>> GetTeamPersonPhotosAsync(int personId, int offset = 0, int limit = 500)
+    public async Task<List<PhotoItem>> GetTeamPersonPhotosAsync(int personId, int offset = 0, int limit = 500, long? startTime = null, long? endTime = null)
     {
         var parameters = new Dictionary<string, string>
         {
@@ -287,6 +293,9 @@ public class SynologyApiService : ISynologyApiService
             ["person_id"] = personId.ToString(),
             ["additional"] = "[\"thumbnail\",\"resolution\",\"orientation\"]"
         };
+
+        if (startTime.HasValue) parameters["start_time"] = startTime.Value.ToString();
+        if (endTime.HasValue) parameters["end_time"] = endTime.Value.ToString();
 
         var data = await PostApiAsync(parameters);
         if (data != null && data.Value.TryGetProperty("list", out var list))
