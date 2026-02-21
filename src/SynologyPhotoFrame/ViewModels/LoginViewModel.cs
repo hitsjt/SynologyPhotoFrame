@@ -95,6 +95,13 @@ public partial class LoginViewModel : ViewModelBase
                     settings.RememberMe = true;
                     await _settingsService.SaveAsync(settings);
                 }
+                else
+                {
+                    var settings = await _settingsService.LoadAsync();
+                    settings.RememberMe = false;
+                    settings.EncryptedPassword = string.Empty;
+                    await _settingsService.SaveAsync(settings);
+                }
 
                 _navigationService.NavigateTo<AlbumSelectionViewModel>();
             }
