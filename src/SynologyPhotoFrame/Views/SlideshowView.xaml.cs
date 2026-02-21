@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -18,6 +19,7 @@ public partial class SlideshowView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        Loaded += (s, e) => Focus();
 
         _touchHelper.SwipeLeft += () => _viewModel?.ShowNextPhotoCommand.Execute(null);
         _touchHelper.SwipeRight += () => _viewModel?.ShowPreviousPhotoCommand.Execute(null);
@@ -53,6 +55,9 @@ public partial class SlideshowView : UserControl
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        // Don't intercept keys when typing in a TextBox (e.g., settings panel)
+        if (e.OriginalSource is TextBox && e.Key != Key.Escape) return;
+
         switch (e.Key)
         {
             case Key.Right:
@@ -107,29 +112,36 @@ public partial class SlideshowView : UserControl
 
     private async void ShowSettingsPanel()
     {
-        if (_settingsViewModel == null)
+        try
         {
-            _settingsViewModel = App.GetService<SettingsViewModel>();
-        }
+            if (_settingsViewModel == null)
+            {
+                _settingsViewModel = App.GetService<SettingsViewModel>();
+            }
 
-        if (_settingsViewModel != null)
+            if (_settingsViewModel != null)
+            {
+                await _settingsViewModel.InitializeAsync();
+
+                IntervalCombo.ItemsSource = _settingsViewModel.IntervalPresets;
+                IntervalCombo.SelectedItem = _settingsViewModel.IntervalSeconds;
+                TransitionCombo.ItemsSource = _settingsViewModel.TransitionTypes;
+                TransitionCombo.SelectedItem = _settingsViewModel.SelectedTransition;
+                ShuffleCheck.IsChecked = _settingsViewModel.ShufflePhotos;
+                ClockCheck.IsChecked = _settingsViewModel.ShowClock;
+                PhotoInfoCheck.IsChecked = _settingsViewModel.ShowPhotoInfo;
+                ScheduleCheck.IsChecked = _settingsViewModel.ScheduleEnabled;
+                StartTimeBox.Text = _settingsViewModel.ScheduleStartTime;
+                EndTimeBox.Text = _settingsViewModel.ScheduleEndTime;
+                CacheSizeText.Text = $"Cache size: {_settingsViewModel.CacheSizeDisplay}";
+            }
+
+            SettingsPanel.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
         {
-            await _settingsViewModel.InitializeAsync();
-
-            IntervalCombo.ItemsSource = _settingsViewModel.IntervalPresets;
-            IntervalCombo.SelectedItem = _settingsViewModel.IntervalSeconds;
-            TransitionCombo.ItemsSource = _settingsViewModel.TransitionTypes;
-            TransitionCombo.SelectedItem = _settingsViewModel.SelectedTransition;
-            ShuffleCheck.IsChecked = _settingsViewModel.ShufflePhotos;
-            ClockCheck.IsChecked = _settingsViewModel.ShowClock;
-            PhotoInfoCheck.IsChecked = _settingsViewModel.ShowPhotoInfo;
-            ScheduleCheck.IsChecked = _settingsViewModel.ScheduleEnabled;
-            StartTimeBox.Text = _settingsViewModel.ScheduleStartTime;
-            EndTimeBox.Text = _settingsViewModel.ScheduleEndTime;
-            CacheSizeText.Text = $"Cache size: {_settingsViewModel.CacheSizeDisplay}";
+            Debug.WriteLine($"[SlideshowView] ShowSettingsPanel error: {ex.Message}");
         }
-
-        SettingsPanel.Visibility = Visibility.Visible;
     }
 
     private void OnSettingsBackgroundClick(object sender, MouseButtonEventArgs e)
@@ -147,34 +159,49 @@ public partial class SlideshowView : UserControl
 
     private async void OnSettingsSaveClick(object sender, RoutedEventArgs e)
     {
-        if (_settingsViewModel != null)
+        try
         {
-            if (IntervalCombo.SelectedItem is int interval)
-                _settingsViewModel.IntervalSeconds = interval;
-            if (TransitionCombo.SelectedItem is TransitionType transition)
-                _settingsViewModel.SelectedTransition = transition;
-            _settingsViewModel.ShufflePhotos = ShuffleCheck.IsChecked == true;
-            _settingsViewModel.ShowClock = ClockCheck.IsChecked == true;
-            _settingsViewModel.ShowPhotoInfo = PhotoInfoCheck.IsChecked == true;
-            _settingsViewModel.ScheduleEnabled = ScheduleCheck.IsChecked == true;
-            _settingsViewModel.ScheduleStartTime = StartTimeBox.Text;
-            _settingsViewModel.ScheduleEndTime = EndTimeBox.Text;
+            if (_settingsViewModel != null)
+            {
+                if (IntervalCombo.SelectedItem is int interval)
+                    _settingsViewModel.IntervalSeconds = interval;
+                if (TransitionCombo.SelectedItem is TransitionType transition)
+                    _settingsViewModel.SelectedTransition = transition;
+                _settingsViewModel.ShufflePhotos = ShuffleCheck.IsChecked == true;
+                _settingsViewModel.ShowClock = ClockCheck.IsChecked == true;
+                _settingsViewModel.ShowPhotoInfo = PhotoInfoCheck.IsChecked == true;
+                _settingsViewModel.ScheduleEnabled = ScheduleCheck.IsChecked == true;
+                _settingsViewModel.ScheduleStartTime = StartTimeBox.Text;
+                _settingsViewModel.ScheduleEndTime = EndTimeBox.Text;
 
-            await _settingsViewModel.SaveAndCloseCommand.ExecuteAsync(null);
+                await _settingsViewModel.SaveAndCloseCommand.ExecuteAsync(null);
 
-            var settings = await App.GetService<Services.Interfaces.ISettingsService>()!.LoadAsync();
-            _viewModel?.UpdateSettings(settings);
-            TransitionControl.TransitionDuration = settings.TransitionDurationSeconds;
+                var settings = await App.GetService<Services.Interfaces.ISettingsService>()!.LoadAsync();
+                _viewModel?.UpdateSettings(settings);
+                TransitionControl.TransitionDuration = settings.TransitionDurationSeconds;
+            }
+            HideSettingsPanel();
         }
-        HideSettingsPanel();
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[SlideshowView] OnSettingsSaveClick error: {ex.Message}");
+            HideSettingsPanel();
+        }
     }
 
     private async void OnClearCacheClick(object sender, RoutedEventArgs e)
     {
-        if (_settingsViewModel != null)
+        try
         {
-            await _settingsViewModel.ClearCacheCommand.ExecuteAsync(null);
-            CacheSizeText.Text = $"Cache size: {_settingsViewModel.CacheSizeDisplay}";
+            if (_settingsViewModel != null)
+            {
+                await _settingsViewModel.ClearCacheCommand.ExecuteAsync(null);
+                CacheSizeText.Text = $"Cache size: {_settingsViewModel.CacheSizeDisplay}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[SlideshowView] OnClearCacheClick error: {ex.Message}");
         }
     }
 

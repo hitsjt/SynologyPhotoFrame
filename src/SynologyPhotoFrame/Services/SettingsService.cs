@@ -59,22 +59,34 @@ public class SettingsService : ISettingsService
     {
         if (string.IsNullOrEmpty(password)) return string.Empty;
         var bytes = Encoding.UTF8.GetBytes(password);
-        var encrypted = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
-        return Convert.ToBase64String(encrypted);
+        try
+        {
+            var encrypted = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(encrypted);
+        }
+        finally
+        {
+            Array.Clear(bytes, 0, bytes.Length);
+        }
     }
 
     public string DecryptPassword(string encryptedPassword)
     {
         if (string.IsNullOrEmpty(encryptedPassword)) return string.Empty;
+        byte[]? bytes = null;
         try
         {
             var encrypted = Convert.FromBase64String(encryptedPassword);
-            var bytes = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
+            bytes = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
             return Encoding.UTF8.GetString(bytes);
         }
         catch
         {
             return string.Empty;
+        }
+        finally
+        {
+            if (bytes != null) Array.Clear(bytes, 0, bytes.Length);
         }
     }
 }

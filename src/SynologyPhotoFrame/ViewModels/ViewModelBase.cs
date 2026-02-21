@@ -11,4 +11,6 @@ public abstract partial class ViewModelBase : ObservableObject
     private string? _errorMessage;
 
     public virtual Task InitializeAsync() => Task.CompletedTask;
+
+    public virtual void Cleanup() { }
 }

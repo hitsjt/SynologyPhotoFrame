@@ -35,6 +35,19 @@ public partial class App : Application
         navigationService.NavigateTo<LoginViewModel>();
     }
 
+    protected override void OnExit(ExitEventArgs e)
+    {
+        var navigationService = _serviceProvider.GetService<INavigationService>();
+        navigationService?.CurrentView?.Cleanup();
+
+        PowerHelper.ActivateDisplay();
+        PowerHelper.AllowSleep();
+
+        (_serviceProvider as IDisposable)?.Dispose();
+
+        base.OnExit(e);
+    }
+
     private static void ConfigureServices(IServiceCollection services)
     {
         // HttpClient with SSL bypass for self-signed NAS certificates

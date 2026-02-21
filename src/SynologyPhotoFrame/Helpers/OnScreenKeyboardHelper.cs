@@ -13,7 +13,7 @@ public static class OnScreenKeyboardHelper
         {
             if (File.Exists(TabTipPath))
             {
-                Process.Start(new ProcessStartInfo
+                using var process = Process.Start(new ProcessStartInfo
                 {
                     FileName = TabTipPath,
                     UseShellExecute = true

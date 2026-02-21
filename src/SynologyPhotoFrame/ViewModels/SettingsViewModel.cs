@@ -43,9 +43,6 @@ public partial class SettingsViewModel : ViewModelBase
     public List<int> IntervalPresets { get; } = new() { 5, 10, 15, 30, 60 };
     public TransitionType[] TransitionTypes => Enum.GetValues<TransitionType>();
 
-    public event Action? SettingsSaved;
-    public event Action? Cancelled;
-
     public SettingsViewModel(ISettingsService settingsService, IImageCacheService cacheService)
     {
         _settingsService = settingsService;
@@ -93,7 +90,6 @@ public partial class SettingsViewModel : ViewModelBase
         settings.ScheduleStartTime = ScheduleStartTime;
         settings.ScheduleEndTime = ScheduleEndTime;
         await _settingsService.SaveAsync(settings);
-        SettingsSaved?.Invoke();
     }
 
     [RelayCommand]
@@ -101,11 +97,5 @@ public partial class SettingsViewModel : ViewModelBase
     {
         await _cacheService.ClearCacheAsync();
         UpdateCacheSize();
-    }
-
-    [RelayCommand]
-    private void Cancel()
-    {
-        Cancelled?.Invoke();
     }
 }

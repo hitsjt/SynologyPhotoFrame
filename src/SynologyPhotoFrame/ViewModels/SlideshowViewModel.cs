@@ -24,7 +24,6 @@ public partial class SlideshowViewModel : ViewModelBase
     private AppSettings _settings = new();
     private readonly Random _random = new();
     private readonly HashSet<int> _loadedPhotoIds = new();
-    private volatile bool _isBackgroundLoading;
     private bool _isAdvancing;
 
     [ObservableProperty]
@@ -185,8 +184,6 @@ public partial class SlideshowViewModel : ViewModelBase
 
     private async Task LoadRemainingPhotosAsync()
     {
-        _isBackgroundLoading = true;
-
         // Convert date filter to Unix timestamps for API
         var startTime = _settings.PhotoFilterStartDate.HasValue
             ? new DateTimeOffset(_settings.PhotoFilterStartDate.Value.Date).ToUnixTimeSeconds()
@@ -219,7 +216,6 @@ public partial class SlideshowViewModel : ViewModelBase
         }
         finally
         {
-            _isBackgroundLoading = false;
             LoadingProgress = string.Empty;
         }
     }
@@ -262,8 +258,15 @@ public partial class SlideshowViewModel : ViewModelBase
         };
         _slideshowTimer.Tick += async (s, e) =>
         {
-            if (!IsPaused && !IsSchedulePaused)
-                await ShowNextPhotoAsync();
+            try
+            {
+                if (!IsPaused && !IsSchedulePaused)
+                    await ShowNextPhotoAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Slideshow] Timer tick error: {ex.Message}");
+            }
         };
         _slideshowTimer.Start();
 
@@ -351,7 +354,7 @@ public partial class SlideshowViewModel : ViewModelBase
         {
             _currentOrderIndex--;
             if (_currentOrderIndex < 0) _currentOrderIndex = _displayOrder.Count - 1;
-            await DisplayPhotoAtCurrentIndexAsync();
+            await DisplayPhotoAtCurrentIndexAsync(direction: -1);
         }
         finally
         {
@@ -359,7 +362,7 @@ public partial class SlideshowViewModel : ViewModelBase
         }
     }
 
-    private async Task DisplayPhotoAtCurrentIndexAsync(int retryCount = 0)
+    private async Task DisplayPhotoAtCurrentIndexAsync(int retryCount = 0, int direction = 1)
     {
         if (retryCount >= 5 || _photoList.Count == 0) return;
 
@@ -378,30 +381,34 @@ public partial class SlideshowViewModel : ViewModelBase
             var path = await _cacheService.GetOrDownloadAsync(photo.Id, photo.CacheKey, _settings.PhotoSizePreference);
             if (path != null)
             {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(path, UriKind.Absolute);
-                bitmap.EndInit();
-                bitmap.Freeze();
+                var bitmap = await Task.Run(() =>
+                {
+                    var bi = new BitmapImage();
+                    bi.BeginInit();
+                    bi.CacheOption = BitmapCacheOption.OnLoad;
+                    bi.UriSource = new Uri(path, UriKind.Absolute);
+                    bi.EndInit();
+                    bi.Freeze();
+                    return bi;
+                });
 
                 CurrentImage = bitmap;
                 CurrentPhotoInfo = photo.Filename;
             }
             else
             {
-                // Download failed, skip to next photo
+                // Download failed, skip to next photo in current direction
                 System.Diagnostics.Debug.WriteLine($"[Slideshow] Skipping photo {photo.Id} ({photo.Filename}): download returned null");
-                _currentOrderIndex = (_currentOrderIndex + 1) % _displayOrder.Count;
-                await DisplayPhotoAtCurrentIndexAsync(retryCount + 1);
+                _currentOrderIndex = (_currentOrderIndex + direction + _displayOrder.Count) % _displayOrder.Count;
+                await DisplayPhotoAtCurrentIndexAsync(retryCount + 1, direction);
                 return;
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[Slideshow] Skipping photo {photo.Id}: {ex.Message}");
-            _currentOrderIndex = (_currentOrderIndex + 1) % _displayOrder.Count;
-            await DisplayPhotoAtCurrentIndexAsync(retryCount + 1);
+            _currentOrderIndex = (_currentOrderIndex + direction + _displayOrder.Count) % _displayOrder.Count;
+            await DisplayPhotoAtCurrentIndexAsync(retryCount + 1, direction);
             return;
         }
 
@@ -454,6 +461,8 @@ public partial class SlideshowViewModel : ViewModelBase
         _navigationService.NavigateTo<AlbumSelectionViewModel>();
     }
 
+    public override void Cleanup() => StopTimers();
+
     public void StopTimers()
     {
         _slideshowTimer?.Stop();
@@ -471,6 +480,7 @@ public partial class SlideshowViewModel : ViewModelBase
 
     public void UpdateSettings(AppSettings newSettings)
     {
+        var wasShuffled = _settings.ShufflePhotos;
         _settings = newSettings;
         ShowClock = newSettings.ShowClock;
         ShowPhotoInfo = newSettings.ShowPhotoInfo;
@@ -480,7 +490,7 @@ public partial class SlideshowViewModel : ViewModelBase
         if (_slideshowTimer != null)
             _slideshowTimer.Interval = TimeSpan.FromSeconds(newSettings.IntervalSeconds);
 
-        if (newSettings.ShufflePhotos && _displayOrder.Count > 0)
+        if (newSettings.ShufflePhotos && !wasShuffled && _displayOrder.Count > 0)
         {
             ShuffleList(_displayOrder);
         }

@@ -158,10 +158,13 @@ public static class PowerHelper
 
             foreach (ManagementObject obj in collection)
             {
-                obj.InvokeMethod("WmiSetBrightness",
-                    new object[] { (uint)1, (byte)percent });
-                Debug.WriteLine($"[PowerHelper] WMI brightness set to {percent}%");
-                return true;
+                using (obj)
+                {
+                    obj.InvokeMethod("WmiSetBrightness",
+                        new object[] { (uint)1, (byte)percent });
+                    Debug.WriteLine($"[PowerHelper] WMI brightness set to {percent}%");
+                    return true;
+                }
             }
         }
         catch (ManagementException ex)

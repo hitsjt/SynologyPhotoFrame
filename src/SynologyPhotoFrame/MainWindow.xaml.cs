@@ -23,15 +23,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(CurrentView));
 
-        if (CurrentView != null)
+        var view = CurrentView;
+        if (view != null)
         {
             try
             {
-                await CurrentView.InitializeAsync();
+                await view.InitializeAsync();
             }
             catch (Exception ex)
             {
-                CurrentView.ErrorMessage = $"Initialization failed: {ex.Message}";
+                view.ErrorMessage = $"Initialization failed: {ex.Message}";
             }
         }
     }

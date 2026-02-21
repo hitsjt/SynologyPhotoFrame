@@ -8,6 +8,7 @@ namespace SynologyPhotoFrame.Services;
 public class SynologyApiService : ISynologyApiService
 {
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly SemaphoreSlim _loginSemaphore = new(1, 1);
     private string _baseUrl = string.Empty;
     private string? _sessionId;
     private string _username = string.Empty;
@@ -51,16 +52,30 @@ public class SynologyApiService : ISynologyApiService
         };
 
         var content = new FormUrlEncodedContent(parameters);
-        var response = await client.PostAsync($"{_baseUrl}/webapi/auth.cgi", content);
+        using var response = await client.PostAsync($"{_baseUrl}/webapi/auth.cgi", content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SynologyAPI] Login HTTP error: {response.StatusCode}");
+            return false;
+        }
+
         var json = await response.Content.ReadAsStringAsync();
 
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        if (root.GetProperty("success").GetBoolean())
+        try
         {
-            _sessionId = root.GetProperty("data").GetProperty("sid").GetString();
-            return true;
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.GetProperty("success").GetBoolean())
+            {
+                _sessionId = root.GetProperty("data").GetProperty("sid").GetString();
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SynologyAPI] Login response parse error: {ex.Message}");
         }
         return false;
     }
@@ -82,7 +97,7 @@ public class SynologyApiService : ISynologyApiService
         try
         {
             var content = new FormUrlEncodedContent(parameters);
-            await client.PostAsync($"{_baseUrl}/webapi/auth.cgi", content);
+            using var response = await client.PostAsync($"{_baseUrl}/webapi/auth.cgi", content);
         }
         catch { }
         finally
@@ -99,41 +114,58 @@ public class SynologyApiService : ISynologyApiService
         var client = CreateClient();
         var url = endpoint ?? $"{_baseUrl}/webapi/entry.cgi";
         var content = new FormUrlEncodedContent(parameters);
-        var response = await client.PostAsync(url, content);
-        var json = await response.Content.ReadAsStringAsync();
+        using var response = await client.PostAsync(url, content);
 
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        if (root.GetProperty("success").GetBoolean())
+        if (!response.IsSuccessStatusCode)
         {
-            _lastError = null;
-            return root.GetProperty("data").Clone();
+            System.Diagnostics.Debug.WriteLine($"[SynologyAPI] POST HTTP error: {response.StatusCode}");
+            return null;
         }
 
-        // Store error details for debugging
-        if (root.TryGetProperty("error", out var error))
-        {
-            _lastError = error.GetRawText();
-            var errorCode = error.TryGetProperty("code", out var code) ? code.GetInt32() : -1;
+        var json = await response.Content.ReadAsStringAsync();
 
-            // Check for session expiry (error code 119)
-            if (errorCode == 119)
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.GetProperty("success").GetBoolean())
             {
-                if (await LoginAsync(_username, _password))
+                _lastError = null;
+                return root.GetProperty("data").Clone();
+            }
+
+            // Store error details for debugging
+            if (root.TryGetProperty("error", out var error))
+            {
+                _lastError = error.GetRawText();
+                var errorCode = error.TryGetProperty("code", out var code) ? code.GetInt32() : -1;
+
+                // Check for session expiry (error code 119)
+                if (errorCode == 119)
                 {
-                    parameters["_sid"] = _sessionId!;
-                    content = new FormUrlEncodedContent(parameters);
-                    response = await client.PostAsync(url, content);
-                    json = await response.Content.ReadAsStringAsync();
-                    using var doc2 = JsonDocument.Parse(json);
-                    if (doc2.RootElement.GetProperty("success").GetBoolean())
+                    if (await RenewSessionAsync())
                     {
-                        _lastError = null;
-                        return doc2.RootElement.GetProperty("data").Clone();
+                        parameters["_sid"] = _sessionId!;
+                        var retryContent = new FormUrlEncodedContent(parameters);
+                        using var retryResponse = await client.PostAsync(url, retryContent);
+
+                        if (!retryResponse.IsSuccessStatusCode) return null;
+
+                        json = await retryResponse.Content.ReadAsStringAsync();
+                        using var doc2 = JsonDocument.Parse(json);
+                        if (doc2.RootElement.GetProperty("success").GetBoolean())
+                        {
+                            _lastError = null;
+                            return doc2.RootElement.GetProperty("data").Clone();
+                        }
                     }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SynologyAPI] POST response parse error: {ex.Message}");
         }
 
         System.Diagnostics.Debug.WriteLine($"[SynologyAPI] Failed: api={parameters.GetValueOrDefault("api")}, method={parameters.GetValueOrDefault("method")}, error={_lastError}");
@@ -151,24 +183,72 @@ public class SynologyApiService : ISynologyApiService
         var client = CreateClient();
         var queryString = string.Join("&", parameters.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}"));
         var url = $"{_baseUrl}/webapi/entry.cgi?{queryString}";
-        var response = await client.GetAsync(url);
-        var json = await response.Content.ReadAsStringAsync();
+        using var response = await client.GetAsync(url);
 
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        if (root.GetProperty("success").GetBoolean())
+        if (!response.IsSuccessStatusCode)
         {
-            return root.GetProperty("data").Clone();
+            System.Diagnostics.Debug.WriteLine($"[SynologyAPI] GET HTTP error: {response.StatusCode}");
+            return null;
         }
 
-        if (root.TryGetProperty("error", out var error))
+        var json = await response.Content.ReadAsStringAsync();
+
+        try
         {
-            _lastError = error.GetRawText();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.GetProperty("success").GetBoolean())
+            {
+                return root.GetProperty("data").Clone();
+            }
+
+            if (root.TryGetProperty("error", out var error))
+            {
+                _lastError = error.GetRawText();
+                var errorCode = error.TryGetProperty("code", out var code) ? code.GetInt32() : -1;
+
+                if (errorCode == 119)
+                {
+                    if (await RenewSessionAsync())
+                    {
+                        parameters["_sid"] = _sessionId!;
+                        queryString = string.Join("&", parameters.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}"));
+                        url = $"{_baseUrl}/webapi/entry.cgi?{queryString}";
+                        using var retryResponse = await client.GetAsync(url);
+
+                        if (!retryResponse.IsSuccessStatusCode) return null;
+
+                        json = await retryResponse.Content.ReadAsStringAsync();
+                        using var doc2 = JsonDocument.Parse(json);
+                        if (doc2.RootElement.GetProperty("success").GetBoolean())
+                        {
+                            return doc2.RootElement.GetProperty("data").Clone();
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SynologyAPI] GET response parse error: {ex.Message}");
         }
 
         System.Diagnostics.Debug.WriteLine($"[SynologyAPI] GET Failed: api={parameters.GetValueOrDefault("api")}, method={parameters.GetValueOrDefault("method")}, error={_lastError}");
         return null;
+    }
+
+    private async Task<bool> RenewSessionAsync()
+    {
+        await _loginSemaphore.WaitAsync();
+        try
+        {
+            return await LoginAsync(_username, _password);
+        }
+        finally
+        {
+            _loginSemaphore.Release();
+        }
     }
 
     public async Task<List<Album>> GetAlbumsAsync(int offset = 0, int limit = 100)
@@ -308,6 +388,11 @@ public class SynologyApiService : ISynologyApiService
 
     public async Task<byte[]?> GetThumbnailAsync(int photoId, string cacheKey, string size = "xl", string type = "unit")
     {
+        return await GetThumbnailCoreAsync(photoId, cacheKey, size, type, retried: false);
+    }
+
+    private async Task<byte[]?> GetThumbnailCoreAsync(int photoId, string cacheKey, string size, string type, bool retried)
+    {
         if (!IsLoggedIn) return null;
 
         // Parse team space prefix: "team_person" -> api=SYNO.FotoTeam.Thumbnail, type=person
@@ -318,10 +403,10 @@ public class SynologyApiService : ISynologyApiService
         var client = CreateClient();
         var url = $"{_baseUrl}/webapi/entry.cgi/{apiName}" +
             $"?api={apiName}&version=1&method=get" +
-            $"&id={photoId}&cache_key={cacheKey}&type={apiType}&size={size}" +
-            $"&_sid={_sessionId}";
+            $"&id={photoId}&cache_key={Uri.EscapeDataString(cacheKey)}&type={Uri.EscapeDataString(apiType)}&size={Uri.EscapeDataString(size)}" +
+            $"&_sid={Uri.EscapeDataString(_sessionId ?? "")}";
 
-        var response = await client.GetAsync(url);
+        using var response = await client.GetAsync(url);
 
         if (response.IsSuccessStatusCode)
         {
@@ -336,6 +421,13 @@ public class SynologyApiService : ISynologyApiService
             // If content-type says image, trust it
             if (response.Content.Headers.ContentType?.MediaType?.StartsWith("image") == true)
                 return bytes;
+
+            // Non-image response — check for session expiry and retry once
+            if (!retried && IsSessionExpiry(bytes))
+            {
+                if (await RenewSessionAsync())
+                    return await GetThumbnailCoreAsync(photoId, cacheKey, size, type, retried: true);
+            }
         }
 
         return null;
@@ -343,20 +435,52 @@ public class SynologyApiService : ISynologyApiService
 
     public async Task<byte[]?> DownloadPhotoAsync(int photoId, string cacheKey)
     {
+        return await DownloadPhotoCoreAsync(photoId, cacheKey, retried: false);
+    }
+
+    private async Task<byte[]?> DownloadPhotoCoreAsync(int photoId, string cacheKey, bool retried)
+    {
         if (!IsLoggedIn) return null;
 
         var client = CreateClient();
         var url = $"{_baseUrl}/webapi/entry.cgi/SYNO.Foto.Download" +
             $"?api=SYNO.Foto.Download&version=1&method=download" +
-            $"&unit_id=[{photoId}]&cache_key={cacheKey}" +
-            $"&_sid={_sessionId}";
+            $"&unit_id=[{photoId}]&cache_key={Uri.EscapeDataString(cacheKey)}" +
+            $"&_sid={Uri.EscapeDataString(_sessionId ?? "")}";
 
-        var response = await client.GetAsync(url);
+        using var response = await client.GetAsync(url);
 
         if (response.IsSuccessStatusCode)
         {
-            return await response.Content.ReadAsByteArrayAsync();
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+
+            // Check for session expiry (API returns JSON error instead of file data)
+            if (!retried && bytes.Length < 1024 && IsSessionExpiry(bytes))
+            {
+                if (await RenewSessionAsync())
+                    return await DownloadPhotoCoreAsync(photoId, cacheKey, retried: true);
+            }
+
+            return bytes;
         }
         return null;
+    }
+
+    private static bool IsSessionExpiry(byte[] data)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("success", out var success) || success.GetBoolean())
+                return false;
+            return root.TryGetProperty("error", out var error) &&
+                   error.TryGetProperty("code", out var code) &&
+                   code.GetInt32() == 119;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

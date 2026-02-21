@@ -9,6 +9,7 @@ public class ImageCacheService : IImageCacheService
     private readonly ISynologyApiService _apiService;
     private readonly string _cacheDir;
     private readonly SemaphoreSlim _downloadSemaphore = new(3, 3);
+    private int _evicting;
     private const long MaxCacheSizeBytes = 500 * 1024 * 1024; // 500MB
 
     public ImageCacheService(ISynologyApiService apiService)
@@ -28,7 +29,7 @@ public class ImageCacheService : IImageCacheService
         var path = GetCachePath(photoId, size, type);
         if (File.Exists(path))
         {
-            File.SetLastAccessTime(path, DateTime.Now);
+            try { File.SetLastAccessTime(path, DateTime.Now); } catch { }
             return path;
         }
 
@@ -88,6 +89,9 @@ public class ImageCacheService : IImageCacheService
 
     private void EvictIfNeeded()
     {
+        // Prevent concurrent eviction runs
+        if (Interlocked.CompareExchange(ref _evicting, 1, 0) != 0) return;
+
         try
         {
             var currentSize = GetCacheSizeBytes();
@@ -103,12 +107,17 @@ public class ImageCacheService : IImageCacheService
                 if (currentSize <= MaxCacheSizeBytes * 0.8) break;
                 try
                 {
-                    currentSize -= file.Length;
+                    var length = file.Length;
                     file.Delete();
+                    currentSize -= length;
                 }
                 catch { }
             }
         }
         catch { }
+        finally
+        {
+            Interlocked.Exchange(ref _evicting, 0);
+        }
     }
 }

@@ -13,6 +13,7 @@ public class NavigationService : INavigationService
         get => _currentView;
         private set
         {
+            _currentView?.Cleanup();
             _currentView = value;
             CurrentViewChanged?.Invoke();
         }
