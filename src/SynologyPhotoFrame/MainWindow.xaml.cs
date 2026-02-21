@@ -37,7 +37,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public new event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     protected void OnPropertyChanged(string propertyName)
     {
