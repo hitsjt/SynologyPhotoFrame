@@ -25,6 +25,7 @@ public partial class SlideshowViewModel : ViewModelBase
     private readonly Random _random = new();
     private readonly HashSet<int> _loadedPhotoIds = new();
     private volatile bool _isBackgroundLoading;
+    private bool _isAdvancing;
 
     [ObservableProperty]
     private BitmapImage? _currentImage;
@@ -61,9 +62,6 @@ public partial class SlideshowViewModel : ViewModelBase
 
     [ObservableProperty]
     private int _totalPhotos;
-
-    [ObservableProperty]
-    private bool _isTransitioning;
 
     [ObservableProperty]
     private string _loadingProgress = string.Empty;
@@ -264,7 +262,7 @@ public partial class SlideshowViewModel : ViewModelBase
         };
         _slideshowTimer.Tick += async (s, e) =>
         {
-            if (!IsPaused && !IsTransitioning && !IsSchedulePaused)
+            if (!IsPaused && !IsSchedulePaused)
                 await ShowNextPhotoAsync();
         };
         _slideshowTimer.Start();
@@ -331,20 +329,34 @@ public partial class SlideshowViewModel : ViewModelBase
     [RelayCommand]
     public async Task ShowNextPhotoAsync()
     {
-        if (_photoList.Count == 0) return;
-
-        _currentOrderIndex = (_currentOrderIndex + 1) % _displayOrder.Count;
-        await DisplayPhotoAtCurrentIndexAsync();
+        if (_isAdvancing || _photoList.Count == 0) return;
+        _isAdvancing = true;
+        try
+        {
+            _currentOrderIndex = (_currentOrderIndex + 1) % _displayOrder.Count;
+            await DisplayPhotoAtCurrentIndexAsync();
+        }
+        finally
+        {
+            _isAdvancing = false;
+        }
     }
 
     [RelayCommand]
     public async Task ShowPreviousPhotoAsync()
     {
-        if (_photoList.Count == 0) return;
-
-        _currentOrderIndex--;
-        if (_currentOrderIndex < 0) _currentOrderIndex = _displayOrder.Count - 1;
-        await DisplayPhotoAtCurrentIndexAsync();
+        if (_isAdvancing || _photoList.Count == 0) return;
+        _isAdvancing = true;
+        try
+        {
+            _currentOrderIndex--;
+            if (_currentOrderIndex < 0) _currentOrderIndex = _displayOrder.Count - 1;
+            await DisplayPhotoAtCurrentIndexAsync();
+        }
+        finally
+        {
+            _isAdvancing = false;
+        }
     }
 
     private async Task DisplayPhotoAtCurrentIndexAsync(int retryCount = 0)

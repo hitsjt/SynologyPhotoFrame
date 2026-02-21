@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using SynologyPhotoFrame.Models;
 
 namespace SynologyPhotoFrame.Controls;
@@ -13,6 +14,7 @@ public class TransitionPresenter : Grid
     private readonly Image _imageB;
     private bool _showingA = true;
     private bool _isAnimating;
+    private DispatcherTimer? _safetyTimer;
 
     public static readonly DependencyProperty TransitionDurationProperty =
         DependencyProperty.Register(nameof(TransitionDuration), typeof(double),
@@ -115,18 +117,37 @@ public class TransitionPresenter : Grid
         translate.Y = 0;
     }
 
+    private void StartSafetyTimer()
+    {
+        _safetyTimer?.Stop();
+        _safetyTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(TransitionDuration + 1)
+        };
+        _safetyTimer.Tick += (s, e) =>
+        {
+            _safetyTimer!.Stop();
+            _isAnimating = false;
+        };
+        _safetyTimer.Start();
+    }
+
+    private void OnAnimationCompleted(Image oldImage)
+    {
+        _safetyTimer?.Stop();
+        _isAnimating = false;
+        oldImage.Source = null;
+    }
+
     private void AnimateFade(Image oldImage, Image newImage, Duration duration)
     {
         _isAnimating = true;
+        StartSafetyTimer();
 
         var fadeIn = new DoubleAnimation(0, 1, duration) { EasingFunction = new QuadraticEase() };
         var fadeOut = new DoubleAnimation(1, 0, duration) { EasingFunction = new QuadraticEase() };
 
-        fadeIn.Completed += (s, e) =>
-        {
-            _isAnimating = false;
-            oldImage.Source = null;
-        };
+        fadeIn.Completed += (s, e) => OnAnimationCompleted(oldImage);
 
         newImage.BeginAnimation(OpacityProperty, fadeIn);
         oldImage.BeginAnimation(OpacityProperty, fadeOut);
@@ -135,6 +156,7 @@ public class TransitionPresenter : Grid
     private void AnimateSlide(Image oldImage, Image newImage, Duration duration, int direction)
     {
         _isAnimating = true;
+        StartSafetyTimer();
         var width = ActualWidth > 0 ? ActualWidth : 1920;
 
         var oldTranslate = (TranslateTransform)((TransformGroup)oldImage.RenderTransform).Children[1];
@@ -148,9 +170,8 @@ public class TransitionPresenter : Grid
 
         slideIn.Completed += (s, e) =>
         {
-            _isAnimating = false;
+            OnAnimationCompleted(oldImage);
             oldImage.Opacity = 0;
-            oldImage.Source = null;
             oldTranslate.X = 0;
         };
 
@@ -161,6 +182,7 @@ public class TransitionPresenter : Grid
     private void AnimateZoom(Image oldImage, Image newImage, Duration duration)
     {
         _isAnimating = true;
+        StartSafetyTimer();
 
         var newScale = (ScaleTransform)((TransformGroup)newImage.RenderTransform).Children[0];
         newScale.ScaleX = 0.8;
@@ -172,11 +194,7 @@ public class TransitionPresenter : Grid
         var scaleX = new DoubleAnimation(0.8, 1, duration) { EasingFunction = new QuadraticEase() };
         var scaleY = new DoubleAnimation(0.8, 1, duration) { EasingFunction = new QuadraticEase() };
 
-        fadeIn.Completed += (s, e) =>
-        {
-            _isAnimating = false;
-            oldImage.Source = null;
-        };
+        fadeIn.Completed += (s, e) => OnAnimationCompleted(oldImage);
 
         newImage.BeginAnimation(OpacityProperty, fadeIn);
         oldImage.BeginAnimation(OpacityProperty, fadeOut);

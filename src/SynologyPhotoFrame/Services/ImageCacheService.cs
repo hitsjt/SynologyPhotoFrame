@@ -32,7 +32,10 @@ public class ImageCacheService : IImageCacheService
             return path;
         }
 
-        await _downloadSemaphore.WaitAsync();
+        if (!await _downloadSemaphore.WaitAsync(TimeSpan.FromSeconds(30)))
+            return null;
+
+        bool downloaded = false;
         try
         {
             if (File.Exists(path)) return path;
@@ -41,7 +44,7 @@ public class ImageCacheService : IImageCacheService
             if (data == null || data.Length == 0) return null;
 
             await File.WriteAllBytesAsync(path, data);
-            await EvictIfNeededAsync();
+            downloaded = true;
             return path;
         }
         catch
@@ -51,6 +54,9 @@ public class ImageCacheService : IImageCacheService
         finally
         {
             _downloadSemaphore.Release();
+
+            if (downloaded)
+                _ = Task.Run(() => EvictIfNeeded());
         }
     }
 
@@ -80,26 +86,29 @@ public class ImageCacheService : IImageCacheService
             .Sum(f => f.Length);
     }
 
-    private Task EvictIfNeededAsync()
+    private void EvictIfNeeded()
     {
-        var currentSize = GetCacheSizeBytes();
-        if (currentSize <= MaxCacheSizeBytes) return Task.CompletedTask;
-
-        var files = new DirectoryInfo(_cacheDir)
-            .GetFiles()
-            .OrderBy(f => f.LastAccessTime)
-            .ToList();
-
-        foreach (var file in files)
+        try
         {
-            if (currentSize <= MaxCacheSizeBytes * 0.8) break;
-            try
+            var currentSize = GetCacheSizeBytes();
+            if (currentSize <= MaxCacheSizeBytes) return;
+
+            var files = new DirectoryInfo(_cacheDir)
+                .GetFiles()
+                .OrderBy(f => f.LastAccessTime)
+                .ToList();
+
+            foreach (var file in files)
             {
-                currentSize -= file.Length;
-                file.Delete();
+                if (currentSize <= MaxCacheSizeBytes * 0.8) break;
+                try
+                {
+                    currentSize -= file.Length;
+                    file.Delete();
+                }
+                catch { }
             }
-            catch { }
         }
-        return Task.CompletedTask;
+        catch { }
     }
 }
