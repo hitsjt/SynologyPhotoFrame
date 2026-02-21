@@ -84,9 +84,9 @@ public partial class LoginViewModel : ViewModelBase
 
             if (success)
             {
+                var settings = await _settingsService.LoadAsync();
                 if (RememberMe)
                 {
-                    var settings = await _settingsService.LoadAsync();
                     settings.NasAddress = NasAddress;
                     settings.Port = port;
                     settings.UseHttps = UseHttps;
@@ -97,7 +97,6 @@ public partial class LoginViewModel : ViewModelBase
                 }
                 else
                 {
-                    var settings = await _settingsService.LoadAsync();
                     settings.RememberMe = false;
                     settings.EncryptedPassword = string.Empty;
                     await _settingsService.SaveAsync(settings);
