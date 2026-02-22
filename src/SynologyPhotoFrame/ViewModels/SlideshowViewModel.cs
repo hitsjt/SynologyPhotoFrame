@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using System.Security.Cryptography;
 using SynologyPhotoFrame.Helpers;
 using SynologyPhotoFrame.Models;
 using SynologyPhotoFrame.Services.Interfaces;
@@ -24,7 +25,6 @@ public partial class SlideshowViewModel : ViewModelBase
     private DispatcherTimer? _clockTimer;
     private DispatcherTimer? _refreshTimer;
     private AppSettings _settings = new();
-    private readonly Random _random = new();
     private readonly HashSet<int> _loadedPhotoIds = new();
     private bool _isAdvancing;
     private bool _isRefreshing;
@@ -177,7 +177,7 @@ public partial class SlideshowViewModel : ViewModelBase
             // Only shuffle the newly added portion to avoid disrupting the current playback
             for (int i = _displayOrder.Count - 1; i > currentCount; i--)
             {
-                int j = currentCount + _random.Next(i - currentCount + 1);
+                int j = currentCount + RandomNumberGenerator.GetInt32(i - currentCount + 1);
                 (_displayOrder[i], _displayOrder[j]) = (_displayOrder[j], _displayOrder[i]);
             }
         }
@@ -536,7 +536,7 @@ public partial class SlideshowViewModel : ViewModelBase
         if (_settings.TransitionType == TransitionType.Random)
         {
             var types = Enum.GetValues<TransitionType>().Where(t => t != TransitionType.Random).ToArray();
-            CurrentTransition = types[_random.Next(types.Length)];
+            CurrentTransition = types[RandomNumberGenerator.GetInt32(types.Length)];
         }
 
         try
@@ -693,7 +693,7 @@ public partial class SlideshowViewModel : ViewModelBase
     {
         for (int i = list.Count - 1; i > 0; i--)
         {
-            int j = _random.Next(i + 1);
+            int j = RandomNumberGenerator.GetInt32(i + 1);
             (list[i], list[j]) = (list[j], list[i]);
         }
     }
