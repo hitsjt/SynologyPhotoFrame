@@ -24,7 +24,7 @@ public partial class SlideshowViewModel : ViewModelBase
     private DispatcherTimer? _clockTimer;
     private DispatcherTimer? _refreshTimer;
     private AppSettings _settings = new();
-    private readonly Random _random = new();
+    private readonly Random _random = Random.Shared;
     private readonly HashSet<int> _loadedPhotoIds = new();
     private bool _isAdvancing;
     private bool _isRefreshing;
@@ -691,6 +691,7 @@ public partial class SlideshowViewModel : ViewModelBase
 
     private void ShuffleList<T>(List<T> list)
     {
+        // Fisher-Yates shuffle: each permutation has equal probability.
         for (int i = list.Count - 1; i > 0; i--)
         {
             int j = _random.Next(i + 1);

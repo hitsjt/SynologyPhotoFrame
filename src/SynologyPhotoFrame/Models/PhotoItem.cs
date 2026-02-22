@@ -22,6 +22,10 @@ public class PhotoItem
     [JsonPropertyName("additional")]
     public PhotoAdditional? Additional { get; set; }
 
+    /// <summary>
+    /// Synology Photos thumbnail/download token for this photo.
+    /// Must be sent as query parameter "cache_key" when requesting image bytes.
+    /// </summary>
     [JsonIgnore]
     public string CacheKey => Additional?.Thumbnail?.CacheKey ?? string.Empty;
 
@@ -43,6 +47,9 @@ public class PhotoAdditional
 
 public class ThumbnailInfo
 {
+    /// <summary>
+    /// Server-generated token used with thumbnail/download APIs to retrieve image data.
+    /// </summary>
     [JsonPropertyName("cache_key")]
     public string CacheKey { get; set; } = string.Empty;
 
