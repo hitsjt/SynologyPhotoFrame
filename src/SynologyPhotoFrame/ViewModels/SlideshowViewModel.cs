@@ -22,10 +22,12 @@ public partial class SlideshowViewModel : ViewModelBase
     private DispatcherTimer? _slideshowTimer;
     private DispatcherTimer? _overlayTimer;
     private DispatcherTimer? _clockTimer;
+    private DispatcherTimer? _refreshTimer;
     private AppSettings _settings = new();
     private readonly Random _random = new();
     private readonly HashSet<int> _loadedPhotoIds = new();
     private bool _isAdvancing;
+    private bool _isRefreshing;
 
     [ObservableProperty]
     private BitmapImage? _currentImage;
@@ -210,6 +212,15 @@ public partial class SlideshowViewModel : ViewModelBase
                     (offset, limit) => _apiService.GetTeamPersonPhotosAsync(personId, offset, limit, startTime, endTime)));
 
             await Task.WhenAll(tasks);
+
+            // Full shuffle after all photos are loaded to mix across sources/batches
+            if (_settings.ShufflePhotos && _displayOrder.Count > 0)
+            {
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    ShuffleList(_displayOrder);
+                });
+            }
         }
         catch (Exception ex)
         {
@@ -241,6 +252,79 @@ public partial class SlideshowViewModel : ViewModelBase
                 {
                     RebuildDisplayOrder();
                     LoadingProgress = $"Loading... {_photoList.Count} photos";
+                }
+            });
+
+            if (batch.Count < limit) break;
+            offset += limit;
+        }
+    }
+
+    private async Task RefreshPhotosAsync()
+    {
+        if (_isRefreshing || IsSchedulePaused) return;
+        _isRefreshing = true;
+
+        try
+        {
+            var startTime = _settings.PhotoFilterStartDate.HasValue
+                ? new DateTimeOffset(_settings.PhotoFilterStartDate.Value.Date).ToUnixTimeSeconds()
+                : (long?)null;
+            var endTime = _settings.PhotoFilterEndDate.HasValue
+                ? new DateTimeOffset(_settings.PhotoFilterEndDate.Value.Date.AddDays(1).AddSeconds(-1)).ToUnixTimeSeconds()
+                : (long?)null;
+
+            var beforeCount = _photoList.Count;
+            var tasks = new List<Task>();
+
+            foreach (var albumId in _settings.SelectedAlbumIds)
+                tasks.Add(RefreshFromSourceAsync(
+                    (offset, limit) => _apiService.GetAlbumPhotosAsync(albumId, offset, limit, startTime, endTime)));
+
+            foreach (var personId in _settings.SelectedPersonIds)
+                tasks.Add(RefreshFromSourceAsync(
+                    (offset, limit) => _apiService.GetPersonPhotosAsync(personId, offset, limit, startTime, endTime)));
+
+            foreach (var personId in _settings.SelectedTeamPersonIds)
+                tasks.Add(RefreshFromSourceAsync(
+                    (offset, limit) => _apiService.GetTeamPersonPhotosAsync(personId, offset, limit, startTime, endTime)));
+
+            await Task.WhenAll(tasks);
+
+            var newCount = _photoList.Count - beforeCount;
+            if (newCount > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Slideshow] Refresh found {newCount} new photo(s), total: {_photoList.Count}");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Slideshow] Refresh error: {ex.Message}");
+        }
+        finally
+        {
+            _isRefreshing = false;
+        }
+    }
+
+    private async Task RefreshFromSourceAsync(Func<int, int, Task<List<PhotoItem>>> fetchFunc)
+    {
+        int offset = 0;
+        const int limit = 500;
+
+        while (true)
+        {
+            var batch = await fetchFunc(offset, limit);
+            if (batch.Count == 0) break;
+
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                var beforeCount = _photoList.Count;
+                AddPhotosToList(batch);
+
+                if (_photoList.Count > beforeCount)
+                {
+                    RebuildDisplayOrder();
                 }
             });
 
@@ -294,6 +378,27 @@ public partial class SlideshowViewModel : ViewModelBase
         _clockTimer.Start();
         CurrentTimeDisplay = DateTime.Now.ToString("HH:mm");
         CheckSchedule();
+
+        // Photo refresh timer - periodically check for new photos
+        if (_settings.PhotoRefreshIntervalMinutes > 0)
+        {
+            _refreshTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(_settings.PhotoRefreshIntervalMinutes)
+            };
+            _refreshTimer.Tick += async (s, e) =>
+            {
+                try
+                {
+                    await RefreshPhotosAsync();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Slideshow] Refresh timer error: {ex.Message}");
+                }
+            };
+            _refreshTimer.Start();
+        }
     }
 
     private void CheckSchedule()
@@ -387,7 +492,14 @@ public partial class SlideshowViewModel : ViewModelBase
         _isAdvancing = true;
         try
         {
-            _currentOrderIndex = (_currentOrderIndex + 1) % _displayOrder.Count;
+            _currentOrderIndex++;
+            if (_currentOrderIndex >= _displayOrder.Count)
+            {
+                // Completed a full cycle — re-shuffle for next round
+                _currentOrderIndex = 0;
+                if (_settings.ShufflePhotos)
+                    ShuffleList(_displayOrder);
+            }
             await DisplayPhotoAtCurrentIndexAsync();
         }
         finally
@@ -519,6 +631,7 @@ public partial class SlideshowViewModel : ViewModelBase
         _slideshowTimer?.Stop();
         _overlayTimer?.Stop();
         _clockTimer?.Stop();
+        _refreshTimer?.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         PowerHelper.CancelScheduledWake();
 
@@ -541,6 +654,32 @@ public partial class SlideshowViewModel : ViewModelBase
 
         if (_slideshowTimer != null)
             _slideshowTimer.Interval = TimeSpan.FromSeconds(newSettings.IntervalSeconds);
+
+        // Update refresh timer
+        if (newSettings.PhotoRefreshIntervalMinutes > 0)
+        {
+            if (_refreshTimer == null)
+            {
+                _refreshTimer = new DispatcherTimer();
+                _refreshTimer.Tick += async (s, e) =>
+                {
+                    try
+                    {
+                        await RefreshPhotosAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Slideshow] Refresh timer error: {ex.Message}");
+                    }
+                };
+            }
+            _refreshTimer.Interval = TimeSpan.FromMinutes(newSettings.PhotoRefreshIntervalMinutes);
+            _refreshTimer.Start();
+        }
+        else
+        {
+            _refreshTimer?.Stop();
+        }
 
         if (newSettings.ShufflePhotos && !wasShuffled && _displayOrder.Count > 0)
         {

@@ -38,9 +38,13 @@ public partial class SettingsViewModel : ViewModelBase
     private string _scheduleEndTime = "22:00";
 
     [ObservableProperty]
+    private int _photoRefreshIntervalMinutes = 30;
+
+    [ObservableProperty]
     private string _cacheSizeDisplay = "0 MB";
 
     public List<int> IntervalPresets { get; } = new() { 5, 10, 15, 30, 60 };
+    public List<int> RefreshIntervalPresets { get; } = new() { 0, 15, 30, 60, 120, 360, 720, 1440 };
     public TransitionType[] TransitionTypes => Enum.GetValues<TransitionType>();
 
     public SettingsViewModel(ISettingsService settingsService, IImageCacheService cacheService)
@@ -61,6 +65,7 @@ public partial class SettingsViewModel : ViewModelBase
         ScheduleEnabled = settings.ScheduleEnabled;
         ScheduleStartTime = settings.ScheduleStartTime;
         ScheduleEndTime = settings.ScheduleEndTime;
+        PhotoRefreshIntervalMinutes = settings.PhotoRefreshIntervalMinutes;
         UpdateCacheSize();
     }
 
@@ -89,6 +94,7 @@ public partial class SettingsViewModel : ViewModelBase
         settings.ScheduleEnabled = ScheduleEnabled;
         settings.ScheduleStartTime = ScheduleStartTime;
         settings.ScheduleEndTime = ScheduleEndTime;
+        settings.PhotoRefreshIntervalMinutes = PhotoRefreshIntervalMinutes;
         await _settingsService.SaveAsync(settings);
     }
 

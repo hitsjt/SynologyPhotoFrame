@@ -126,6 +126,17 @@
                             <ComboBox x:Name="IntervalCombo" Grid.Column="1"/>
                         </Grid>
 
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Photo refresh" Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="15" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="RefreshIntervalCombo" Grid.Column="1"
+                                      DisplayMemberPath="Display" SelectedValuePath="Value"/>
+                        </Grid>
+
                         <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>

@@ -127,6 +127,24 @@ public partial class SlideshowView : UserControl
                 IntervalCombo.SelectedItem = _settingsViewModel.IntervalSeconds;
                 TransitionCombo.ItemsSource = _settingsViewModel.TransitionTypes;
                 TransitionCombo.SelectedItem = _settingsViewModel.SelectedTransition;
+
+                var refreshItems = _settingsViewModel.RefreshIntervalPresets.Select(v => new
+                {
+                    Value = v,
+                    Display = v switch
+                    {
+                        0 => "Off",
+                        60 => "1 hour",
+                        120 => "2 hours",
+                        360 => "6 hours",
+                        720 => "12 hours",
+                        1440 => "24 hours",
+                        _ => $"{v} min"
+                    }
+                }).ToList();
+                RefreshIntervalCombo.ItemsSource = refreshItems;
+                RefreshIntervalCombo.SelectedValue = _settingsViewModel.PhotoRefreshIntervalMinutes;
+
                 ShuffleCheck.IsChecked = _settingsViewModel.ShufflePhotos;
                 ClockCheck.IsChecked = _settingsViewModel.ShowClock;
                 PhotoInfoCheck.IsChecked = _settingsViewModel.ShowPhotoInfo;
@@ -167,6 +185,8 @@ public partial class SlideshowView : UserControl
                     _settingsViewModel.IntervalSeconds = interval;
                 if (TransitionCombo.SelectedItem is TransitionType transition)
                     _settingsViewModel.SelectedTransition = transition;
+                if (RefreshIntervalCombo.SelectedValue is int refreshInterval)
+                    _settingsViewModel.PhotoRefreshIntervalMinutes = refreshInterval;
                 _settingsViewModel.ShufflePhotos = ShuffleCheck.IsChecked == true;
                 _settingsViewModel.ShowClock = ClockCheck.IsChecked == true;
                 _settingsViewModel.ShowPhotoInfo = PhotoInfoCheck.IsChecked == true;
