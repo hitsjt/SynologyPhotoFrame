@@ -195,16 +195,20 @@ public partial class AlbumSelectionViewModel : ViewModelBase
     [RelayCommand]
     private async Task StartSlideshowAsync()
     {
-        if (SelectedCount == 0)
+        var selectedAlbumIds = Albums.Where(a => a.IsSelected).Select(a => a.Id).ToList();
+        var selectedPersonIds = People.Where(p => p.IsSelected).Select(p => p.Id).ToList();
+        var selectedTeamPersonIds = TeamPeople.Where(p => p.IsSelected).Select(p => p.Id).ToList();
+
+        if (selectedAlbumIds.Count + selectedPersonIds.Count + selectedTeamPersonIds.Count == 0)
         {
             ErrorMessage = "Please select at least one album or person.";
             return;
         }
 
         var settings = await _settingsService.LoadAsync();
-        settings.SelectedAlbumIds = Albums.Where(a => a.IsSelected).Select(a => a.Id).ToList();
-        settings.SelectedPersonIds = People.Where(p => p.IsSelected).Select(p => p.Id).ToList();
-        settings.SelectedTeamPersonIds = TeamPeople.Where(p => p.IsSelected).Select(p => p.Id).ToList();
+        settings.SelectedAlbumIds = selectedAlbumIds;
+        settings.SelectedPersonIds = selectedPersonIds;
+        settings.SelectedTeamPersonIds = selectedTeamPersonIds;
         settings.PhotoFilterStartDate = PhotoFilterStartDate;
         settings.PhotoFilterEndDate = PhotoFilterEndDate;
         await _settingsService.SaveAsync(settings);

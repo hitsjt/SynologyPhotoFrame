@@ -18,6 +18,9 @@ public partial class AlbumSelectionView : UserControl
 
     private void AlbumItem_Click(object sender, MouseButtonEventArgs e)
     {
+        if (e.OriginalSource is DependencyObject source && FindParent<CheckBox>(source) != null)
+            return;
+
         if (sender is FrameworkElement fe && fe.DataContext is Album album)
         {
             album.IsSelected = !album.IsSelected;
@@ -27,6 +30,9 @@ public partial class AlbumSelectionView : UserControl
 
     private void PersonItem_Click(object sender, MouseButtonEventArgs e)
     {
+        if (e.OriginalSource is DependencyObject source && FindParent<CheckBox>(source) != null)
+            return;
+
         if (sender is FrameworkElement fe && fe.DataContext is Person person)
         {
             person.IsSelected = !person.IsSelected;
@@ -158,5 +164,16 @@ public partial class AlbumSelectionView : UserControl
         var usedWidth = cardsPerRow * cardWidth;
         var sidePadding = Math.Max(8, (availableWidth - usedWidth) / 2);
         ic.Padding = new Thickness(sidePadding, 8, sidePadding, 8);
+    }
+
+    private static T? FindParent<T>(DependencyObject child) where T : DependencyObject
+    {
+        var current = child;
+        while (current != null)
+        {
+            if (current is T target) return target;
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 }
