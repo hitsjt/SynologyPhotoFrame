@@ -77,13 +77,34 @@ public partial class App : Application
         services.AddSingleton<MainWindow>();
     }
 
-    private static bool ValidateNasCertificate(HttpRequestMessage message, X509Certificate2? _, X509Chain? __, SslPolicyErrors errors)
+    private static bool ValidateNasCertificate(HttpRequestMessage message, X509Certificate2? certificate, X509Chain? chain, SslPolicyErrors errors)
     {
         if (errors == SslPolicyErrors.None)
             return true;
 
         var host = message.RequestUri?.Host;
-        return !string.IsNullOrWhiteSpace(host) && IsPrivateOrLocalHost(host);
+        if (string.IsNullOrWhiteSpace(host) || !IsPrivateOrLocalHost(host))
+            return false;
+
+        if ((errors & SslPolicyErrors.RemoteCertificateNotAvailable) != 0 || certificate == null)
+            return false;
+
+        if ((errors & SslPolicyErrors.RemoteCertificateChainErrors) != 0 && chain != null)
+        {
+            foreach (var status in chain.ChainStatus)
+            {
+                if (status.Status is X509ChainStatusFlags.NoError
+                    or X509ChainStatusFlags.UntrustedRoot
+                    or X509ChainStatusFlags.PartialChain)
+                {
+                    continue;
+                }
+
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsPrivateOrLocalHost(string host)
@@ -91,8 +112,7 @@ public partial class App : Application
         if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
             host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
             host.EndsWith(".lan", StringComparison.OrdinalIgnoreCase) ||
-            host.EndsWith(".home.arpa", StringComparison.OrdinalIgnoreCase) ||
-            !host.Contains('.'))
+            host.EndsWith(".home.arpa", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
