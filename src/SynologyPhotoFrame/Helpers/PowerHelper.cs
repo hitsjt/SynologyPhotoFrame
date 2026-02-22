@@ -9,8 +9,24 @@ public static class PowerHelper
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint SetThreadExecutionState(uint esFlags);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateWaitableTimer(IntPtr lpTimerAttributes, bool bManualReset, string? lpTimerName);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetWaitableTimer(IntPtr hTimer, ref long pDueTime, int lPeriod,
+        IntPtr pfnCompletionRoutine, IntPtr lpArgToCompletionRoutine, bool fResume);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CancelWaitableTimer(IntPtr hTimer);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
@@ -52,6 +68,30 @@ public static class PowerHelper
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
         public string szPhysicalMonitorDescription;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint type;
+        public MOUSEINPUT mi;
+    }
+
+    private const uint INPUT_MOUSE = 0;
+    private const uint MOUSEEVENTF_MOVE = 0x0001;
+
+    private static IntPtr _wakeTimerHandle = IntPtr.Zero;
+    private static DateTime _scheduledWakeTime;
 
     /// <summary>
     /// Prevent system sleep and keep display on.
@@ -110,10 +150,12 @@ public static class PowerHelper
 
     /// <summary>
     /// Activate display for slideshow: turn on, max brightness, prevent sleep + display off.
+    /// Uses mouse simulation for reliable wake on Modern Standby devices (e.g. Surface).
     /// </summary>
     public static void ActivateDisplay()
     {
         PreventSleep();
+        SimulateMouseMove();
         TurnOnDisplay();
         SetBrightness(100);
     }
@@ -130,21 +172,101 @@ public static class PowerHelper
     }
 
     /// <summary>
-    /// Disable lock screen on wake from sleep via powercfg.
+    /// Configure power settings for unattended operation:
+    /// - Disable lock screen on wake from sleep (CONSOLELOCK)
+    /// - Enable wake timers so ScheduleSystemWake can wake from sleep (RTCWAKE)
     /// Requires admin privileges.
     /// </summary>
     public static void DisableLockOnWake()
     {
         try
         {
+            // Disable console lock on wake
             RunPowerCfg("/SETACVALUEINDEX SCHEME_CURRENT SUB_NONE CONSOLELOCK 0");
             RunPowerCfg("/SETDCVALUEINDEX SCHEME_CURRENT SUB_NONE CONSOLELOCK 0");
+
+            // Enable wake timers (Sleep subgroup / Allow wake timers setting)
+            // Without this, SetWaitableTimer(fResume=true) cannot wake the system
+            const string sleepSubgroup = "238c9fa8-0aad-41ed-83f4-97be242c8f20";
+            const string wakeTimerSetting = "bd3b718a-0680-4d9d-8ab2-e1d2b4ac806d";
+            RunPowerCfg($"/SETACVALUEINDEX SCHEME_CURRENT {sleepSubgroup} {wakeTimerSetting} 1");
+            RunPowerCfg($"/SETDCVALUEINDEX SCHEME_CURRENT {sleepSubgroup} {wakeTimerSetting} 1");
+
             RunPowerCfg("/SETACTIVE SCHEME_CURRENT");
         }
         catch
         {
             // Requires admin - silently ignore if not available
         }
+    }
+
+    /// <summary>
+    /// Schedule a system wake-up at the specified time using a waitable timer with fResume=true.
+    /// The timer will wake the system from sleep (S3 or Modern Standby).
+    /// Skips re-creation if already set for the same time.
+    /// Returns false if timer creation/setting failed — caller should keep the system awake as fallback.
+    /// </summary>
+    public static bool ScheduleSystemWake(DateTime wakeTime)
+    {
+        if (_wakeTimerHandle != IntPtr.Zero && _scheduledWakeTime == wakeTime)
+            return true; // Already set for this time
+
+        CancelScheduledWake();
+
+        _wakeTimerHandle = CreateWaitableTimer(IntPtr.Zero, true, null);
+        if (_wakeTimerHandle == IntPtr.Zero)
+        {
+            Debug.WriteLine("[PowerHelper] Failed to create wake timer");
+            return false;
+        }
+
+        long dueTime = wakeTime.ToFileTime();
+        if (SetWaitableTimer(_wakeTimerHandle, ref dueTime, 0, IntPtr.Zero, IntPtr.Zero, true))
+        {
+            _scheduledWakeTime = wakeTime;
+            Debug.WriteLine($"[PowerHelper] Wake timer set for {wakeTime:yyyy-MM-dd HH:mm:ss}");
+            return true;
+        }
+        else
+        {
+            Debug.WriteLine("[PowerHelper] Failed to set wake timer");
+            CloseHandle(_wakeTimerHandle);
+            _wakeTimerHandle = IntPtr.Zero;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Cancel any pending scheduled wake-up and release the timer handle.
+    /// </summary>
+    public static void CancelScheduledWake()
+    {
+        if (_wakeTimerHandle != IntPtr.Zero)
+        {
+            CancelWaitableTimer(_wakeTimerHandle);
+            CloseHandle(_wakeTimerHandle);
+            _wakeTimerHandle = IntPtr.Zero;
+            _scheduledWakeTime = default;
+            Debug.WriteLine("[PowerHelper] Wake timer cancelled");
+        }
+    }
+
+    /// <summary>
+    /// Simulate a small mouse movement to wake display on Modern Standby devices.
+    /// SC_MONITORPOWER alone is unreliable on Surface and other Modern Standby hardware.
+    /// </summary>
+    private static void SimulateMouseMove()
+    {
+        var inputs = new INPUT[]
+        {
+            new()
+            {
+                type = INPUT_MOUSE,
+                mi = new MOUSEINPUT { dx = 1, dy = 0, dwFlags = MOUSEEVENTF_MOVE }
+            }
+        };
+        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        Debug.WriteLine("[PowerHelper] Simulated mouse move for display wake");
     }
 
     private static bool TrySetBrightnessWmi(int percent)

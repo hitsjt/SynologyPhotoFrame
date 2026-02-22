@@ -17,6 +17,7 @@ src/SynologyPhotoFrame/
 ├── App.xaml(.cs)                        # Entry point, DI setup, PowerHelper init
 ├── MainWindow.xaml(.cs)                 # Shell window with ContentControl navigation
 ├── SynologyPhotoFrame.csproj
+├── app.manifest                         # UAC admin elevation manifest
 ├── Resources/
 │   ├── Styles/
 │   │   ├── Colors.xaml                  # Theme colors (light theme)
@@ -103,19 +104,27 @@ services.AddTransient<SettingsViewModel>();
 ### Daily Schedule
 - Set active hours (start/end time, supports midnight crossing)
 - At end time: brightness set to 0, display turned off, slideshow paused
-- At start time: display turned on, brightness set to 100%, slideshow resumes
-- System stays awake 24/7 (no sleep/wake cycle)
-- Lock screen disabled via `powercfg` (requires admin)
+- At start time: system wakes from sleep, display turned on, brightness set to 100%, slideshow resumes
+- Inactive period: system allowed to sleep for low power consumption
+- Wake timer (`SetWaitableTimer` with `fResume=true`) wakes system from sleep at start time
+- `SimulateMouseMove` (`SendInput`) for reliable display wake on Modern Standby devices (e.g. Surface)
+- `SystemEvents.PowerModeChanged` handler re-checks schedule on system resume
+- Lock screen disabled via `powercfg CONSOLELOCK 0` (requires admin)
+- Wake timers enabled via `powercfg` (Sleep subgroup RTCWAKE setting)
+- App runs as admin (`app.manifest` with `requireAdministrator`) to ensure powercfg works
 
 ### Power Management (P/Invoke)
 - `PreventSleep()` — `SetThreadExecutionState` (system + display) during active playback
-- `PreventSleepKeepSystemOn()` — `SetThreadExecutionState` (system only) during inactive schedule
-- `AllowSleep()` — Release on exit
+- `PreventSleepKeepSystemOn()` — `SetThreadExecutionState` (system only) during display deactivation
+- `AllowSleep()` — Release execution state, allow system to sleep during inactive schedule
 - `TurnOnDisplay()` / `TurnOffDisplay()` — `SendMessage` `SC_MONITORPOWER`
+- `SimulateMouseMove()` — `SendInput` mouse move for reliable wake on Modern Standby (Surface, etc.)
 - `SetBrightness(int)` — WMI (integrated panels) + DXVA2 DDC/CI (external monitors)
-- `ActivateDisplay()` — Composite: PreventSleep + TurnOn + Brightness 100%
+- `ActivateDisplay()` — Composite: PreventSleep + SimulateMouseMove + TurnOn + Brightness 100%
 - `DeactivateDisplay()` — Composite: PreventSleepKeepSystemOn + Brightness 0 + TurnOff
-- `DisableLockOnWake()` — `powercfg CONSOLELOCK 0`
+- `ScheduleSystemWake(DateTime)` — `CreateWaitableTimer` + `SetWaitableTimer(fResume=true)` to wake from sleep
+- `CancelScheduledWake()` — Cancel and release wake timer
+- `DisableLockOnWake()` — `powercfg CONSOLELOCK 0` + enable wake timers (RTCWAKE)
 
 ### Image Cache
 - Location: `%LOCALAPPDATA%/SynologyPhotoFrame/cache`
@@ -199,11 +208,18 @@ Border:          #E2E8F0  (card/separator borders)
 ## Application Flow
 
 ```
-App.OnStartup → DisableLockOnWake → DI setup
+App.OnStartup → DisableLockOnWake (admin) → DI setup
   → LoginView: Enter NAS credentials → API login
   → AlbumSelectionView: Browse albums/people → select sources
   → SlideshowView: Load photos → start timers → display slideshow
     ├── Slideshow timer: advance photos with transitions
     ├── Clock timer: update time display + check schedule
-    └── Overlay timer: auto-hide controls after 3s
+    ├── Overlay timer: auto-hide controls after 3s
+    └── PowerModeChanged: re-check schedule on system resume
+
+Schedule lifecycle:
+  Active period → PreventSleep, slideshow runs normally
+  End time hit  → DeactivateDisplay, ScheduleSystemWake(next start), AllowSleep
+  System sleeps → near-zero power consumption
+  Wake timer    → system wakes, PowerModeChanged fires, CheckSchedule activates
 ```

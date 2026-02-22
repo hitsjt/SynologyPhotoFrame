@@ -40,6 +40,7 @@ public partial class App : Application
         var navigationService = _serviceProvider.GetService<INavigationService>();
         navigationService?.CurrentView?.Cleanup();
 
+        PowerHelper.CancelScheduledWake();
         PowerHelper.ActivateDisplay();
         PowerHelper.AllowSleep();
 

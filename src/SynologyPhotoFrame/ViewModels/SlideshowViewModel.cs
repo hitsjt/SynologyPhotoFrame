@@ -2,6 +2,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using SynologyPhotoFrame.Helpers;
 using SynologyPhotoFrame.Models;
 using SynologyPhotoFrame.Services.Interfaces;
@@ -251,6 +252,7 @@ public partial class SlideshowViewModel : ViewModelBase
     private void StartTimers()
     {
         PowerHelper.PreventSleep();
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         _slideshowTimer = new DispatcherTimer
         {
@@ -301,6 +303,7 @@ public partial class SlideshowViewModel : ViewModelBase
             if (IsSchedulePaused)
             {
                 IsSchedulePaused = false;
+                PowerHelper.CancelScheduledWake();
                 PowerHelper.ActivateDisplay();
             }
             return;
@@ -315,18 +318,66 @@ public partial class SlideshowViewModel : ViewModelBase
             ? now >= start && now < end
             : now >= start || now < end; // crosses midnight
 
-        if (!inSchedule && !IsSchedulePaused)
+        if (inSchedule)
         {
-            // Entering inactive period: dim and turn off display
-            IsSchedulePaused = true;
-            PowerHelper.DeactivateDisplay();
+            if (IsSchedulePaused)
+            {
+                // Entering active period: cancel wake timer, turn on display
+                IsSchedulePaused = false;
+                PowerHelper.CancelScheduledWake();
+                PowerHelper.ActivateDisplay();
+            }
         }
-        else if (inSchedule && IsSchedulePaused)
+        else
         {
-            // Entering active period: turn on and brighten display
-            IsSchedulePaused = false;
-            PowerHelper.ActivateDisplay();
+            if (!IsSchedulePaused)
+            {
+                // Entering inactive period: turn off display
+                IsSchedulePaused = true;
+                PowerHelper.DeactivateDisplay();
+            }
+            // Ensure wake timer is set and system is allowed to sleep.
+            // Runs every tick while awake during inactive period, but
+            // ScheduleSystemWake skips re-creation if already set for the same time.
+            var nextWake = CalculateNextWakeTime(start);
+            if (PowerHelper.ScheduleSystemWake(nextWake))
+            {
+                PowerHelper.AllowSleep();
+            }
+            // else: wake timer failed — DeactivateDisplay already set
+            // PreventSleepKeepSystemOn as fallback (system stays on with display off)
         }
+    }
+
+    private static DateTime CalculateNextWakeTime(TimeSpan startTime)
+    {
+        var wakeToday = DateTime.Today + startTime;
+        return wakeToday > DateTime.Now ? wakeToday : wakeToday.AddDays(1);
+    }
+
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode != PowerModes.Resume) return;
+
+        System.Diagnostics.Debug.WriteLine("[Slideshow] System resumed from sleep");
+
+        // Dispatch to UI thread since PowerModeChanged fires on a system thread
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            // Re-check schedule first — if it's now active period, activate display
+            CheckSchedule();
+
+            // If still in inactive period, the display turned on during resume.
+            // Turn it back off. Don't call DeactivateDisplay() here because its
+            // PreventSleepKeepSystemOn() would override AllowSleep() from CheckSchedule,
+            // preventing the system from going back to sleep.
+            // AllowSleep already cleared ES_DISPLAY_REQUIRED, so TurnOffDisplay works.
+            if (IsSchedulePaused)
+            {
+                PowerHelper.SetBrightness(0);
+                PowerHelper.TurnOffDisplay();
+            }
+        });
     }
 
     [RelayCommand]
@@ -468,11 +519,12 @@ public partial class SlideshowViewModel : ViewModelBase
         _slideshowTimer?.Stop();
         _overlayTimer?.Stop();
         _clockTimer?.Stop();
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        PowerHelper.CancelScheduledWake();
 
         if (IsSchedulePaused)
         {
-            PowerHelper.TurnOnDisplay();
-            PowerHelper.SetBrightness(100);
+            PowerHelper.ActivateDisplay();
         }
 
         PowerHelper.AllowSleep();
