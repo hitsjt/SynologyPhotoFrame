@@ -1,0 +1,84 @@
+<UserControl x:Class="SynologyPhotoFrame.Controls.TouchTimePicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="SpinButton" TargetType="RepeatButton">
+            <Setter Property="Background" Value="#F1F5F9"/>
+            <Setter Property="Foreground" Value="#1E293B"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Width" Value="56"/>
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Delay" Value="400"/>
+            <Setter Property="Interval" Value="200"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E2E8F0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#CBD5E1"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel Orientation="Horizontal">
+        <!-- Hour spinner -->
+        <StackPanel>
+            <RepeatButton x:Name="HourUpButton" Content="&#x25B2;"
+                          Style="{StaticResource SpinButton}"
+                          Click="OnHourUp"/>
+            <Border Background="#F1F5F9" CornerRadius="6" Margin="0,4">
+                <TextBlock x:Name="HourText" Text="08"
+                           FontSize="28" FontWeight="SemiBold"
+                           Foreground="#1E293B"
+                           Width="56" Height="44"
+                           TextAlignment="Center"
+                           VerticalAlignment="Center"
+                           Padding="0,6,0,0"/>
+            </Border>
+            <RepeatButton x:Name="HourDownButton" Content="&#x25BC;"
+                          Style="{StaticResource SpinButton}"
+                          Click="OnHourDown"/>
+        </StackPanel>
+
+        <!-- Colon separator -->
+        <TextBlock Text=":" FontSize="28" FontWeight="Bold"
+                   Foreground="#1E293B"
+                   VerticalAlignment="Center"
+                   Margin="6,0"/>
+
+        <!-- Minute spinner -->
+        <StackPanel>
+            <RepeatButton x:Name="MinuteUpButton" Content="&#x25B2;"
+                          Style="{StaticResource SpinButton}"
+                          Click="OnMinuteUp"/>
+            <Border Background="#F1F5F9" CornerRadius="6" Margin="0,4">
+                <TextBlock x:Name="MinuteText" Text="00"
+                           FontSize="28" FontWeight="SemiBold"
+                           Foreground="#1E293B"
+                           Width="56" Height="44"
+                           TextAlignment="Center"
+                           VerticalAlignment="Center"
+                           Padding="0,6,0,0"/>
+            </Border>
+            <RepeatButton x:Name="MinuteDownButton" Content="&#x25BC;"
+                          Style="{StaticResource SpinButton}"
+                          Click="OnMinuteDown"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

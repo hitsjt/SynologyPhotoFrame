@@ -131,8 +131,8 @@ public partial class SlideshowView : UserControl
                 ClockCheck.IsChecked = _settingsViewModel.ShowClock;
                 PhotoInfoCheck.IsChecked = _settingsViewModel.ShowPhotoInfo;
                 ScheduleCheck.IsChecked = _settingsViewModel.ScheduleEnabled;
-                StartTimeBox.Text = _settingsViewModel.ScheduleStartTime;
-                EndTimeBox.Text = _settingsViewModel.ScheduleEndTime;
+                StartTimePicker.Time = _settingsViewModel.ScheduleStartTime;
+                EndTimePicker.Time = _settingsViewModel.ScheduleEndTime;
                 CacheSizeText.Text = $"Cache size: {_settingsViewModel.CacheSizeDisplay}";
             }
 
@@ -171,8 +171,8 @@ public partial class SlideshowView : UserControl
                 _settingsViewModel.ShowClock = ClockCheck.IsChecked == true;
                 _settingsViewModel.ShowPhotoInfo = PhotoInfoCheck.IsChecked == true;
                 _settingsViewModel.ScheduleEnabled = ScheduleCheck.IsChecked == true;
-                _settingsViewModel.ScheduleStartTime = StartTimeBox.Text;
-                _settingsViewModel.ScheduleEndTime = EndTimeBox.Text;
+                _settingsViewModel.ScheduleStartTime = StartTimePicker.Time;
+                _settingsViewModel.ScheduleEndTime = EndTimePicker.Time;
 
                 await _settingsViewModel.SaveAndCloseCommand.ExecuteAsync(null);
 
