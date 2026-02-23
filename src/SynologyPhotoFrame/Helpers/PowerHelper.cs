@@ -157,6 +157,7 @@ public static class PowerHelper
         PreventSleep();
         SimulateMouseMove();
         TurnOnDisplay();
+        // Some Modern Standby devices (e.g. Surface) need a second wake pulse.
         SimulateMouseMove();
         TurnOnDisplay();
         SetBrightness(100);
