@@ -98,6 +98,32 @@ public static class PowerHelper
     private const string WakeTaskName = "SynologyPhotoFrameWake";
     private static bool _taskWakeScheduled;
 
+    private static readonly Lazy<bool> _isModernStandby = new(() =>
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Power");
+            if (key?.GetValue("CsEnabled") is int csEnabled)
+            {
+                Debug.WriteLine($"[PowerHelper] CsEnabled={csEnabled} (Modern Standby: {csEnabled == 1})");
+                return csEnabled == 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[PowerHelper] Failed to read CsEnabled: {ex.Message}");
+        }
+        return false;
+    });
+
+    /// <summary>
+    /// True if the system uses Modern Standby (S0 Low Power Idle / Connected Standby).
+    /// On these devices, SetWaitableTimer(fResume) and Task Scheduler WakeToRun are
+    /// unreliable — the system should be kept awake with display off instead.
+    /// </summary>
+    public static bool IsModernStandby => _isModernStandby.Value;
+
     /// <summary>
     /// Prevent system sleep and keep display on.
     /// </summary>
