@@ -409,6 +409,7 @@ public partial class SlideshowViewModel : ViewModelBase
             {
                 IsSchedulePaused = false;
                 PowerHelper.CancelScheduledWake();
+                PowerHelper.ClearExecutionRequired();
                 PowerHelper.ActivateDisplay();
             }
             return;
@@ -430,6 +431,7 @@ public partial class SlideshowViewModel : ViewModelBase
                 // Entering active period: cancel wake timer, turn on display
                 IsSchedulePaused = false;
                 PowerHelper.CancelScheduledWake();
+                PowerHelper.ClearExecutionRequired();
                 PowerHelper.ActivateDisplay();
             }
         }
@@ -445,10 +447,10 @@ public partial class SlideshowViewModel : ViewModelBase
             if (PowerHelper.IsModernStandby)
             {
                 // Modern Standby (S0 Low Power Idle): wake timers are unreliable.
-                // Keep ES_SYSTEM_REQUIRED set so the process stays running and
-                // DispatcherTimer keeps ticking — CheckSchedule will naturally
+                // Use ExecutionRequired to prevent PLM from suspending the process,
+                // so DispatcherTimer keeps ticking and CheckSchedule will naturally
                 // detect the active period and call ActivateDisplay.
-                // DeactivateDisplay already set PreventSleepKeepSystemOn.
+                PowerHelper.RequestExecutionRequired();
             }
             else
             {
@@ -656,6 +658,7 @@ public partial class SlideshowViewModel : ViewModelBase
         _refreshTimer?.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         PowerHelper.CancelScheduledWake();
+        PowerHelper.ClearExecutionRequired();
 
         if (IsSchedulePaused)
         {
