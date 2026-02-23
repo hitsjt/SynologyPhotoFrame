@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             xmlns:controls="clr-namespace:SynologyPhotoFrame.Controls"
              mc:Ignorable="d"
              d:DesignHeight="800" d:DesignWidth="1024">
 
@@ -281,14 +282,12 @@
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="From" Foreground="{StaticResource TextSecondaryBrush}"
                                FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <DatePicker SelectedDate="{Binding PhotoFilterStartDate, Mode=TwoWay}"
-                                MinWidth="130" FontSize="14" VerticalAlignment="Center"/>
-                    <TextBlock Text="-" Foreground="{StaticResource TextSecondaryBrush}"
+                    <controls:TouchDatePicker SelectedDate="{Binding PhotoFilterStartDate, Mode=TwoWay}"/>
+                    <TextBlock Text="&#x2013;" Foreground="{StaticResource TextSecondaryBrush}"
                                FontSize="18" VerticalAlignment="Center" Margin="12,0"/>
                     <TextBlock Text="To" Foreground="{StaticResource TextSecondaryBrush}"
                                FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <DatePicker SelectedDate="{Binding PhotoFilterEndDate, Mode=TwoWay}"
-                                MinWidth="130" FontSize="14" VerticalAlignment="Center"/>
+                    <controls:TouchDatePicker SelectedDate="{Binding PhotoFilterEndDate, Mode=TwoWay}"/>
                 </StackPanel>
 
                 <Button Grid.Column="2" Content="Start Slideshow"
