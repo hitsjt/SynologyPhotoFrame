@@ -34,6 +34,19 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="ValueTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="28"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#1E293B"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="0,4,0,0"/>
+            <Setter Property="MaxLength" Value="2"/>
+            <Setter Property="CaretBrush" Value="#3B82F6"/>
+        </Style>
     </UserControl.Resources>
 
     <StackPanel Orientation="Horizontal">
@@ -43,13 +56,12 @@
                           Style="{StaticResource SpinButton}"
                           Click="OnHourUp"/>
             <Border Background="#F1F5F9" CornerRadius="6" Margin="0,4">
-                <TextBlock x:Name="HourText" Text="08"
-                           FontSize="28" FontWeight="SemiBold"
-                           Foreground="#1E293B"
-                           Width="56" Height="44"
-                           TextAlignment="Center"
-                           VerticalAlignment="Center"
-                           Padding="0,6,0,0"/>
+                <TextBox x:Name="HourText" Text="08"
+                         Style="{StaticResource ValueTextBox}"
+                         Width="56" Height="44"
+                         GotFocus="OnTextBoxGotFocus"
+                         LostFocus="OnHourLostFocus"
+                         KeyDown="OnTextBoxKeyDown"/>
             </Border>
             <RepeatButton x:Name="HourDownButton" Content="&#x25BC;"
                           Style="{StaticResource SpinButton}"
@@ -68,13 +80,12 @@
                           Style="{StaticResource SpinButton}"
                           Click="OnMinuteUp"/>
             <Border Background="#F1F5F9" CornerRadius="6" Margin="0,4">
-                <TextBlock x:Name="MinuteText" Text="00"
-                           FontSize="28" FontWeight="SemiBold"
-                           Foreground="#1E293B"
-                           Width="56" Height="44"
-                           TextAlignment="Center"
-                           VerticalAlignment="Center"
-                           Padding="0,6,0,0"/>
+                <TextBox x:Name="MinuteText" Text="00"
+                         Style="{StaticResource ValueTextBox}"
+                         Width="56" Height="44"
+                         GotFocus="OnTextBoxGotFocus"
+                         LostFocus="OnMinuteLostFocus"
+                         KeyDown="OnTextBoxKeyDown"/>
             </Border>
             <RepeatButton x:Name="MinuteDownButton" Content="&#x25BC;"
                           Style="{StaticResource SpinButton}"
