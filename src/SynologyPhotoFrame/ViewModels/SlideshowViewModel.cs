@@ -441,16 +441,28 @@ public partial class SlideshowViewModel : ViewModelBase
                 IsSchedulePaused = true;
                 PowerHelper.DeactivateDisplay();
             }
-            // Ensure wake timer is set and system is allowed to sleep.
-            // Runs every tick while awake during inactive period, but
-            // ScheduleSystemWake skips re-creation if already set for the same time.
-            var nextWake = CalculateNextWakeTime(start);
-            if (PowerHelper.ScheduleSystemWake(nextWake))
+
+            if (PowerHelper.IsModernStandby)
             {
-                PowerHelper.AllowSleep();
+                // Modern Standby (S0 Low Power Idle): wake timers are unreliable.
+                // Keep ES_SYSTEM_REQUIRED set so the process stays running and
+                // DispatcherTimer keeps ticking — CheckSchedule will naturally
+                // detect the active period and call ActivateDisplay.
+                // DeactivateDisplay already set PreventSleepKeepSystemOn.
             }
-            // else: wake timer failed — DeactivateDisplay already set
-            // PreventSleepKeepSystemOn as fallback (system stays on with display off)
+            else
+            {
+                // Traditional S3 sleep: set wake timer and allow system to sleep.
+                // Runs every tick while awake during inactive period, but
+                // ScheduleSystemWake skips re-creation if already set for the same time.
+                var nextWake = CalculateNextWakeTime(start);
+                if (PowerHelper.ScheduleSystemWake(nextWake))
+                {
+                    PowerHelper.AllowSleep();
+                }
+                // else: wake timer failed — DeactivateDisplay already set
+                // PreventSleepKeepSystemOn as fallback (system stays on with display off)
+            }
         }
     }
 
@@ -473,14 +485,24 @@ public partial class SlideshowViewModel : ViewModelBase
             CheckSchedule();
 
             // If still in inactive period, the display turned on during resume.
-            // Turn it back off. Don't call DeactivateDisplay() here because its
-            // PreventSleepKeepSystemOn() would override AllowSleep() from CheckSchedule,
-            // preventing the system from going back to sleep.
-            // AllowSleep already cleared ES_DISPLAY_REQUIRED, so TurnOffDisplay works.
+            // Turn it back off.
             if (IsSchedulePaused)
             {
-                PowerHelper.SetBrightness(0);
-                PowerHelper.TurnOffDisplay();
+                if (PowerHelper.IsModernStandby)
+                {
+                    // On Modern Standby, call DeactivateDisplay to ensure
+                    // ES_SYSTEM_REQUIRED is set (keeping the process alive)
+                    // and the display is properly turned off.
+                    PowerHelper.DeactivateDisplay();
+                }
+                else
+                {
+                    // On S3, don't call DeactivateDisplay because its
+                    // PreventSleepKeepSystemOn would override AllowSleep from
+                    // CheckSchedule, preventing the system from going back to sleep.
+                    PowerHelper.SetBrightness(0);
+                    PowerHelper.TurnOffDisplay();
+                }
             }
         });
     }
