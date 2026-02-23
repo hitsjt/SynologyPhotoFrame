@@ -298,10 +298,10 @@
 
         <!-- Settings Panel -->
         <Grid x:Name="SettingsPanel" Grid.RowSpan="3" Visibility="Collapsed">
-            <Grid Background="#60000000" MouseLeftButtonDown="OnSettingsBackgroundClick"/>
+            <Grid Background="#E0000000" MouseLeftButtonDown="OnSettingsBackgroundClick"/>
             <Border Background="{StaticResource SecondaryDarkBrush}"
                     CornerRadius="16"
-                    MinWidth="480" MaxWidth="560"
+                    MinWidth="480" MaxWidth="620"
                     Margin="32"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     Padding="32,28"
@@ -327,7 +327,18 @@
                             <ComboBox x:Name="IntervalCombo" Grid.Column="1"/>
                         </Grid>
 
-                        <Grid Margin="0,0,0,16">
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Photo refresh" Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="15" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="RefreshIntervalCombo" Grid.Column="1"
+                                      DisplayMemberPath="Display" SelectedValuePath="Value"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>
                                 <ColumnDefinition Width="*"/>
@@ -352,21 +363,19 @@
                         <CheckBox x:Name="ScheduleCheck" Content="Enable daily schedule" Margin="0,0,0,12"/>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="160"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="12"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Active hours" Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="15" VerticalAlignment="Center"/>
-                            <TextBox x:Name="StartTimeBox" Grid.Column="1" MaxLength="5"
-                                     MinWidth="80" HorizontalContentAlignment="Center"/>
-                            <TextBlock Grid.Column="3" Text="-" VerticalAlignment="Center"
-                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="18"
-                                       Margin="0,0,12,0"/>
-                            <TextBox x:Name="EndTimeBox" Grid.Column="4" MaxLength="5"
-                                     MinWidth="80" MaxWidth="80" HorizontalContentAlignment="Center"/>
+                                       FontSize="15" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <controls:TouchTimePicker x:Name="StartTimePicker"/>
+                                <TextBlock Text="&#x2013;" VerticalAlignment="Center"
+                                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="22"
+                                           Margin="16,0"/>
+                                <controls:TouchTimePicker x:Name="EndTimePicker"/>
+                            </StackPanel>
                         </Grid>
 
                         <!-- Separator -->
