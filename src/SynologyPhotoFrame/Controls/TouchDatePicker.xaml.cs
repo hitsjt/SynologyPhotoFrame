@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace SynologyPhotoFrame.Controls;
 
@@ -144,5 +145,71 @@ public partial class TouchDatePicker : UserControl
         _hasValue = false;
         SelectedDate = null;
         UpdateDisplay();
+    }
+
+    private void OnTextBoxGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox tb)
+        {
+            tb.SelectAll();
+        }
+    }
+
+    private void OnTextBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter || e.Key == Key.Return)
+        {
+            MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            UpdateDisplay();
+            MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            e.Handled = true;
+        }
+    }
+
+    private void OnYearLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(YearText.Text.Trim(), out var y) && y >= 1900 && y <= 2099)
+        {
+            EnsureHasValue();
+            _year = y;
+            SetDateAndNotify();
+        }
+        else
+        {
+            UpdateDisplay();
+        }
+    }
+
+    private void OnMonthLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(MonthText.Text.Trim(), out var m) && m >= 1 && m <= 12)
+        {
+            EnsureHasValue();
+            _month = m;
+            SetDateAndNotify();
+        }
+        else
+        {
+            UpdateDisplay();
+        }
+    }
+
+    private void OnDayLostFocus(object sender, RoutedEventArgs e)
+    {
+        EnsureHasValue();
+        var maxDay = DateTime.DaysInMonth(_year, _month);
+        if (int.TryParse(DayText.Text.Trim(), out var d) && d >= 1 && d <= maxDay)
+        {
+            _day = d;
+            SetDateAndNotify();
+        }
+        else
+        {
+            UpdateDisplay();
+        }
     }
 }

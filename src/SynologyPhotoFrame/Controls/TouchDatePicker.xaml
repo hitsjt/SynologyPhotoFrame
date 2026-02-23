@@ -35,6 +35,18 @@
             </Setter>
         </Style>
 
+        <Style x:Key="ValueTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#1E293B"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="0,4,0,0"/>
+            <Setter Property="CaretBrush" Value="#3B82F6"/>
+        </Style>
+
         <Style x:Key="ClearButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#94A3B8"/>
@@ -73,13 +85,13 @@
         <StackPanel>
             <RepeatButton Content="&#x25B2;" Style="{StaticResource SpinButton}" Click="OnYearUp"/>
             <Border Background="#F1F5F9" CornerRadius="6" Margin="0,3">
-                <TextBlock x:Name="YearText" Text="----"
-                           FontSize="22" FontWeight="SemiBold"
-                           Foreground="#1E293B"
-                           Width="64" Height="36"
-                           TextAlignment="Center"
-                           VerticalAlignment="Center"
-                           Padding="0,4,0,0"/>
+                <TextBox x:Name="YearText" Text="----"
+                         Style="{StaticResource ValueTextBox}"
+                         Width="64" Height="36"
+                         MaxLength="4"
+                         GotFocus="OnTextBoxGotFocus"
+                         LostFocus="OnYearLostFocus"
+                         KeyDown="OnTextBoxKeyDown"/>
             </Border>
             <RepeatButton Content="&#x25BC;" Style="{StaticResource SpinButton}" Click="OnYearDown"/>
         </StackPanel>
@@ -91,13 +103,13 @@
         <StackPanel>
             <RepeatButton Content="&#x25B2;" Style="{StaticResource SpinButton}" Click="OnMonthUp"/>
             <Border Background="#F1F5F9" CornerRadius="6" Margin="0,3">
-                <TextBlock x:Name="MonthText" Text="--"
-                           FontSize="22" FontWeight="SemiBold"
-                           Foreground="#1E293B"
-                           Width="52" Height="36"
-                           TextAlignment="Center"
-                           VerticalAlignment="Center"
-                           Padding="0,4,0,0"/>
+                <TextBox x:Name="MonthText" Text="--"
+                         Style="{StaticResource ValueTextBox}"
+                         Width="52" Height="36"
+                         MaxLength="2"
+                         GotFocus="OnTextBoxGotFocus"
+                         LostFocus="OnMonthLostFocus"
+                         KeyDown="OnTextBoxKeyDown"/>
             </Border>
             <RepeatButton Content="&#x25BC;" Style="{StaticResource SpinButton}" Click="OnMonthDown"/>
         </StackPanel>
@@ -109,13 +121,13 @@
         <StackPanel>
             <RepeatButton Content="&#x25B2;" Style="{StaticResource SpinButton}" Click="OnDayUp"/>
             <Border Background="#F1F5F9" CornerRadius="6" Margin="0,3">
-                <TextBlock x:Name="DayText" Text="--"
-                           FontSize="22" FontWeight="SemiBold"
-                           Foreground="#1E293B"
-                           Width="52" Height="36"
-                           TextAlignment="Center"
-                           VerticalAlignment="Center"
-                           Padding="0,4,0,0"/>
+                <TextBox x:Name="DayText" Text="--"
+                         Style="{StaticResource ValueTextBox}"
+                         Width="52" Height="36"
+                         MaxLength="2"
+                         GotFocus="OnTextBoxGotFocus"
+                         LostFocus="OnDayLostFocus"
+                         KeyDown="OnTextBoxKeyDown"/>
             </Border>
             <RepeatButton Content="&#x25BC;" Style="{StaticResource SpinButton}" Click="OnDayDown"/>
         </StackPanel>

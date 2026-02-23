@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace SynologyPhotoFrame.Controls;
 
@@ -72,13 +73,64 @@ public partial class TouchTimePicker : UserControl
 
     private void OnMinuteUp(object sender, RoutedEventArgs e)
     {
-        _minute = (_minute + 15) % 60;
+        _minute = (_minute + 1) % 60;
         SetTimeAndNotify();
     }
 
     private void OnMinuteDown(object sender, RoutedEventArgs e)
     {
-        _minute = (_minute + 45) % 60;
+        _minute = (_minute + 59) % 60;
         SetTimeAndNotify();
+    }
+
+    private void OnTextBoxGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox tb)
+        {
+            tb.SelectAll();
+        }
+    }
+
+    private void OnTextBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter || e.Key == Key.Return)
+        {
+            // Move focus away to trigger LostFocus validation
+            MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            // Revert to current value
+            UpdateDisplay();
+            MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            e.Handled = true;
+        }
+    }
+
+    private void OnHourLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(HourText.Text.Trim(), out var h) && h >= 0 && h <= 23)
+        {
+            _hour = h;
+            SetTimeAndNotify();
+        }
+        else
+        {
+            UpdateDisplay();
+        }
+    }
+
+    private void OnMinuteLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(MinuteText.Text.Trim(), out var m) && m >= 0 && m <= 59)
+        {
+            _minute = m;
+            SetTimeAndNotify();
+        }
+        else
+        {
+            UpdateDisplay();
+        }
     }
 }
