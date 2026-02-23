@@ -160,6 +160,7 @@ public static class PowerHelper
     public static void ActivateDisplay()
     {
         PreventSleep();
+        TurnOnDisplay();
         SimulateMouseMove();
         TurnOnDisplay();
         SetBrightness(100);
@@ -400,10 +401,15 @@ public static class PowerHelper
             {
                 type = INPUT_MOUSE,
                 mi = new MOUSEINPUT { dx = 1, dy = 0, dwFlags = MOUSEEVENTF_MOVE }
+            },
+            new()
+            {
+                type = INPUT_MOUSE,
+                mi = new MOUSEINPUT { dx = -1, dy = 0, dwFlags = MOUSEEVENTF_MOVE }
             }
         };
         SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-        Debug.WriteLine("[PowerHelper] Simulated mouse move for display wake");
+        Debug.WriteLine("[PowerHelper] Simulated wake mouse move (+1/-1) for display wake");
     }
 
     private static bool TrySetBrightnessWmi(int percent)
