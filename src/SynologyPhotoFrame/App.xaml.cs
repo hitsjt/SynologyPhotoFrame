@@ -26,6 +26,8 @@ public partial class App : Application
 
         // Disable lock screen on wake so slideshow can resume automatically
         PowerHelper.DisableLockOnWake();
+        // Clean up stale wake registration from a previous crash.
+        PowerHelper.CancelScheduledWake();
 
         var services = new ServiceCollection();
         ConfigureServices(services);

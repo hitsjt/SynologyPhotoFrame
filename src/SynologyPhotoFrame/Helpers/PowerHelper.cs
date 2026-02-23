@@ -89,6 +89,7 @@ public static class PowerHelper
 
     private const uint INPUT_MOUSE = 0;
     private const uint MOUSEEVENTF_MOVE = 0x0001;
+    private const string WakeTaskName = "SynologyPhotoFrameWake";
 
     private static IntPtr _wakeTimerHandle = IntPtr.Zero;
     private static DateTime _scheduledWakeTime;
@@ -252,6 +253,8 @@ public static class PowerHelper
             _scheduledWakeTime = default;
             Debug.WriteLine("[PowerHelper] Wake timer cancelled");
         }
+
+        TryDeleteWakeTask();
     }
 
     /// <summary>
@@ -363,5 +366,25 @@ public static class PowerHelper
         };
         using var p = Process.Start(psi);
         p?.WaitForExit(3000);
+    }
+
+    private static void TryDeleteWakeTask()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "schtasks",
+                Arguments = $"/delete /tn \"{WakeTaskName}\" /f",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            };
+            using var p = Process.Start(psi);
+            p?.WaitForExit(3000);
+        }
+        catch
+        {
+            // Ignore: task may not exist, schtasks may be unavailable, or permissions may be insufficient.
+        }
     }
 }
