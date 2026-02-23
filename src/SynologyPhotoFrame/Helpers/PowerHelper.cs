@@ -30,6 +30,15 @@ public static class PowerHelper
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr PowerCreateRequest(ref REASON_CONTEXT context);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool PowerSetRequest(IntPtr powerRequest, int requestType);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool PowerClearRequest(IntPtr powerRequest, int requestType);
+
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
 
@@ -92,6 +101,21 @@ public static class PowerHelper
     private const uint INPUT_MOUSE = 0;
     private const uint MOUSEEVENTF_MOVE = 0x0001;
 
+    private const uint POWER_REQUEST_CONTEXT_VERSION = 0;
+    private const uint POWER_REQUEST_CONTEXT_SIMPLE_STRING = 0x1;
+    private const int PowerRequestExecutionRequired = 3;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct REASON_CONTEXT
+    {
+        public uint Version;
+        public uint Flags;
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string SimpleReasonString;
+    }
+
+    private static IntPtr _executionRequestHandle = IntPtr.Zero;
+
     private static IntPtr _wakeTimerHandle = IntPtr.Zero;
     private static DateTime _scheduledWakeTime;
 
@@ -143,6 +167,54 @@ public static class PowerHelper
     public static void AllowSleep()
     {
         SetThreadExecutionState(ES_CONTINUOUS);
+    }
+
+    /// <summary>
+    /// Request that the process keeps running during Modern Standby (S0 Low Power Idle).
+    /// Without this, PLM will suspend the process and timers will stop firing.
+    /// </summary>
+    public static void RequestExecutionRequired()
+    {
+        if (_executionRequestHandle != IntPtr.Zero) return; // Already active
+
+        var context = new REASON_CONTEXT
+        {
+            Version = POWER_REQUEST_CONTEXT_VERSION,
+            Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING,
+            SimpleReasonString = "Photo frame scheduled to turn on display"
+        };
+        _executionRequestHandle = PowerCreateRequest(ref context);
+        if (_executionRequestHandle == IntPtr.Zero || _executionRequestHandle == new IntPtr(-1))
+        {
+            _executionRequestHandle = IntPtr.Zero;
+            Debug.WriteLine("[PowerHelper] PowerCreateRequest failed");
+            return;
+        }
+
+        if (PowerSetRequest(_executionRequestHandle, PowerRequestExecutionRequired))
+        {
+            Debug.WriteLine("[PowerHelper] ExecutionRequired set — process will stay active during Modern Standby");
+        }
+        else
+        {
+            Debug.WriteLine("[PowerHelper] PowerSetRequest(ExecutionRequired) failed");
+            CloseHandle(_executionRequestHandle);
+            _executionRequestHandle = IntPtr.Zero;
+        }
+    }
+
+    /// <summary>
+    /// Release the execution-required power request, allowing the system to
+    /// suspend the process during Modern Standby again.
+    /// </summary>
+    public static void ClearExecutionRequired()
+    {
+        if (_executionRequestHandle == IntPtr.Zero) return;
+
+        PowerClearRequest(_executionRequestHandle, PowerRequestExecutionRequired);
+        CloseHandle(_executionRequestHandle);
+        _executionRequestHandle = IntPtr.Zero;
+        Debug.WriteLine("[PowerHelper] ExecutionRequired cleared");
     }
 
     /// <summary>
