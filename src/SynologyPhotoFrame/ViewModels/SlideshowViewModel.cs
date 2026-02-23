@@ -465,6 +465,7 @@ public partial class SlideshowViewModel : ViewModelBase
         if (e.Mode != PowerModes.Resume) return;
 
         System.Diagnostics.Debug.WriteLine("[Slideshow] System resumed from sleep");
+        PowerHelper.ActivateDisplay();
 
         // Dispatch to UI thread since PowerModeChanged fires on a system thread
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>

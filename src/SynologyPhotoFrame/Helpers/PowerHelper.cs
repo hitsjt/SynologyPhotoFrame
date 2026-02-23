@@ -157,6 +157,8 @@ public static class PowerHelper
         PreventSleep();
         SimulateMouseMove();
         TurnOnDisplay();
+        SimulateMouseMove();
+        TurnOnDisplay();
         SetBrightness(100);
     }
 
