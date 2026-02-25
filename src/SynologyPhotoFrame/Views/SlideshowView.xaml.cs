@@ -151,6 +151,10 @@ public partial class SlideshowView : UserControl
                 ScheduleCheck.IsChecked = _settingsViewModel.ScheduleEnabled;
                 StartTimePicker.Time = _settingsViewModel.ScheduleStartTime;
                 EndTimePicker.Time = _settingsViewModel.ScheduleEndTime;
+                InactiveBrightnessSlider.Value = _settingsViewModel.InactiveBrightness;
+                InactiveBrightnessText.Text = $"{_settingsViewModel.InactiveBrightness}%";
+                InactiveBrightnessSlider.ValueChanged += (s, e) =>
+                    InactiveBrightnessText.Text = $"{(int)InactiveBrightnessSlider.Value}%";
                 CacheSizeText.Text = $"Cache size: {_settingsViewModel.CacheSizeDisplay}";
             }
 
@@ -193,6 +197,7 @@ public partial class SlideshowView : UserControl
                 _settingsViewModel.ScheduleEnabled = ScheduleCheck.IsChecked == true;
                 _settingsViewModel.ScheduleStartTime = StartTimePicker.Time;
                 _settingsViewModel.ScheduleEndTime = EndTimePicker.Time;
+                _settingsViewModel.InactiveBrightness = (int)InactiveBrightnessSlider.Value;
 
                 await _settingsViewModel.SaveAndCloseCommand.ExecuteAsync(null);
 

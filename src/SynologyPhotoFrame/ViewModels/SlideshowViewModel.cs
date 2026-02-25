@@ -28,8 +28,6 @@ public partial class SlideshowViewModel : ViewModelBase
     private readonly HashSet<int> _loadedPhotoIds = new();
     private bool _isAdvancing;
     private bool _isRefreshing;
-    private int _activateRetryCount;
-    private System.Threading.Timer? _modernStandbyTimer;
 
     [ObservableProperty]
     private BitmapImage? _currentImage;
@@ -410,9 +408,6 @@ public partial class SlideshowViewModel : ViewModelBase
             if (IsSchedulePaused)
             {
                 IsSchedulePaused = false;
-                StopModernStandbyTimer();
-                PowerHelper.CancelScheduledWake();
-                PowerHelper.ClearExecutionRequired();
                 PowerHelper.ActivateDisplay();
             }
             return;
@@ -431,114 +426,23 @@ public partial class SlideshowViewModel : ViewModelBase
         {
             if (IsSchedulePaused)
             {
-                // Entering active period: cancel wake timer, turn on display
+                // Entering active period: restore full brightness
                 IsSchedulePaused = false;
-                StopModernStandbyTimer();
-                PowerHelper.CancelScheduledWake();
-                PowerHelper.ClearExecutionRequired();
-                PowerHelper.ActivateDisplay();
-                // On Modern Standby (e.g. Surface Go 2), the display may not respond
-                // to the first activation attempt. Retry for many seconds.
-                _activateRetryCount = 15;
-            }
-            else if (_activateRetryCount > 0)
-            {
-                // Retry display activation — Modern Standby displays may need
-                // multiple attempts with delays to reliably turn on.
-                _activateRetryCount--;
-                PowerHelper.ActivateDisplay();
+                PowerHelper.PreventSleep();
+                PowerHelper.SetBrightness(100);
             }
         }
         else
         {
             if (!IsSchedulePaused)
             {
-                // Entering inactive period: turn off display
+                // Entering inactive period: dim brightness, pause slideshow
                 IsSchedulePaused = true;
-                PowerHelper.DeactivateDisplay();
-            }
-
-            if (PowerHelper.IsModernStandby)
-            {
-                // Modern Standby (S0 Low Power Idle): wake timers are unreliable.
-                // Use ExecutionRequired to prevent PLM from suspending the process.
-                // Additionally, start a System.Threading.Timer as backup because
-                // DispatcherTimer may not fire reliably during DRIPS (Deepest Runtime
-                // Idle Platform State) on devices like Surface Go 2.
-                PowerHelper.RequestExecutionRequired();
-                StartModernStandbyTimer();
-            }
-            else
-            {
-                // Traditional S3 sleep: set wake timer and allow system to sleep.
-                // Runs every tick while awake during inactive period, but
-                // ScheduleSystemWake skips re-creation if already set for the same time.
-                var nextWake = CalculateNextWakeTime(start);
-                if (PowerHelper.ScheduleSystemWake(nextWake))
-                {
-                    PowerHelper.AllowSleep();
-                }
-                // else: wake timer failed — DeactivateDisplay already set
-                // PreventSleepKeepSystemOn as fallback (system stays on with display off)
+                PowerHelper.ClearDisplayOn();
+                PowerHelper.PreventSleepKeepSystemOn();
+                PowerHelper.SetBrightness(_settings.InactiveBrightness);
             }
         }
-    }
-
-    private void StartModernStandbyTimer()
-    {
-        if (_modernStandbyTimer != null) return; // Already running
-
-        _modernStandbyTimer = new System.Threading.Timer(
-            ModernStandbyTimerCallback, null,
-            TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
-        System.Diagnostics.Debug.WriteLine("[Slideshow] Modern Standby backup timer started (15s interval)");
-    }
-
-    private void StopModernStandbyTimer()
-    {
-        _modernStandbyTimer?.Dispose();
-        _modernStandbyTimer = null;
-    }
-
-    /// <summary>
-    /// Fires on a thread-pool thread every 15 seconds during Modern Standby inactive period.
-    /// DispatcherTimer may not fire during DRIPS (Deepest Runtime Idle Platform State) on
-    /// devices like Surface Go 2, so this backup timer ensures the active period is detected.
-    /// </summary>
-    private void ModernStandbyTimerCallback(object? state)
-    {
-        if (!IsSchedulePaused || !_settings.ScheduleEnabled) return;
-
-        if (!TimeSpan.TryParse(_settings.ScheduleStartTime, out var start) ||
-            !TimeSpan.TryParse(_settings.ScheduleEndTime, out var end))
-            return;
-
-        var now = DateTime.Now.TimeOfDay;
-        bool inSchedule = start <= end
-            ? now >= start && now < end
-            : now >= start || now < end;
-
-        if (inSchedule)
-        {
-            System.Diagnostics.Debug.WriteLine("[Slideshow] Modern Standby timer detected active period — forcing display wake");
-
-            // Aggressively wake display from this background thread.
-            // This is more reliable than DispatcherTimer during DRIPS because
-            // System.Threading.Timer uses the thread pool, not the WPF message pump.
-            PowerHelper.ForceWakeDisplay();
-
-            // Dispatch to UI thread to update schedule state and resume slideshow
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                CheckSchedule();
-            });
-        }
-    }
-
-    private static DateTime CalculateNextWakeTime(TimeSpan startTime)
-    {
-        var wakeToday = DateTime.Today + startTime;
-        return wakeToday > DateTime.Now ? wakeToday : wakeToday.AddDays(1);
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
@@ -550,37 +454,8 @@ public partial class SlideshowViewModel : ViewModelBase
         // Dispatch to UI thread since PowerModeChanged fires on a system thread
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
-            // Re-check schedule first — if it's now active period, activate display
+            // Re-check schedule — adjusts brightness and pause state
             CheckSchedule();
-
-            if (IsSchedulePaused)
-            {
-                // Still in inactive period: the display turned on during resume.
-                // Turn it back off.
-                if (PowerHelper.IsModernStandby)
-                {
-                    // On Modern Standby, call DeactivateDisplay to ensure
-                    // ES_SYSTEM_REQUIRED is set (keeping the process alive)
-                    // and the display is properly turned off.
-                    PowerHelper.DeactivateDisplay();
-                }
-                else
-                {
-                    // On S3, don't call DeactivateDisplay because its
-                    // PreventSleepKeepSystemOn would override AllowSleep from
-                    // CheckSchedule, preventing the system from going back to sleep.
-                    PowerHelper.SetBrightness(0);
-                    PowerHelper.TurnOffDisplay();
-                }
-            }
-            else
-            {
-                // Active period after resume: ensure display is on.
-                // On Modern Standby (e.g. Surface Go 2), the display may not
-                // respond immediately after system resume.
-                _activateRetryCount = 15;
-                PowerHelper.ActivateDisplay();
-            }
         });
     }
 
@@ -731,14 +606,12 @@ public partial class SlideshowViewModel : ViewModelBase
         _overlayTimer?.Stop();
         _clockTimer?.Stop();
         _refreshTimer?.Stop();
-        StopModernStandbyTimer();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
-        PowerHelper.CancelScheduledWake();
-        PowerHelper.ClearExecutionRequired();
 
         if (IsSchedulePaused)
         {
-            PowerHelper.ActivateDisplay();
+            PowerHelper.PreventSleep();
+            PowerHelper.SetBrightness(100);
         }
 
         PowerHelper.AllowSleep();
