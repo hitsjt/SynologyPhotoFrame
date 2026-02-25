@@ -176,6 +176,23 @@
                                 <controls:TouchTimePicker x:Name="EndTimePicker"/>
                             </StackPanel>
                         </Grid>
+                        <Grid Margin="0,8,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Inactive brightness" Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="15" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <Slider x:Name="InactiveBrightnessSlider" Grid.Column="1"
+                                    Minimum="0" Maximum="100" TickFrequency="5"
+                                    IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center"/>
+                            <TextBlock x:Name="InactiveBrightnessText" Grid.Column="2"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="14" VerticalAlignment="Center"
+                                       Margin="12,0,0,0" MinWidth="36" TextAlignment="Right"/>
+                        </Grid>
 
                         <!-- Separator -->
                         <Rectangle Height="1" Fill="#E2E8F0" Margin="0,16,0,16"/>

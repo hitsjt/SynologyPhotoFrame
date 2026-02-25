@@ -38,6 +38,9 @@ public partial class SettingsViewModel : ViewModelBase
     private string _scheduleEndTime = "22:00";
 
     [ObservableProperty]
+    private int _inactiveBrightness;
+
+    [ObservableProperty]
     private int _photoRefreshIntervalMinutes = 30;
 
     [ObservableProperty]
@@ -65,6 +68,7 @@ public partial class SettingsViewModel : ViewModelBase
         ScheduleEnabled = settings.ScheduleEnabled;
         ScheduleStartTime = settings.ScheduleStartTime;
         ScheduleEndTime = settings.ScheduleEndTime;
+        InactiveBrightness = settings.InactiveBrightness;
         PhotoRefreshIntervalMinutes = settings.PhotoRefreshIntervalMinutes;
         UpdateCacheSize();
     }
@@ -94,6 +98,7 @@ public partial class SettingsViewModel : ViewModelBase
         settings.ScheduleEnabled = ScheduleEnabled;
         settings.ScheduleStartTime = ScheduleStartTime;
         settings.ScheduleEndTime = ScheduleEndTime;
+        settings.InactiveBrightness = InactiveBrightness;
         settings.PhotoRefreshIntervalMinutes = PhotoRefreshIntervalMinutes;
         await _settingsService.SaveAsync(settings);
     }
