@@ -30,6 +30,9 @@ public static class PowerHelper
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr PowerCreateRequest(ref REASON_CONTEXT context);
 
@@ -100,6 +103,9 @@ public static class PowerHelper
 
     private const uint INPUT_MOUSE = 0;
     private const uint MOUSEEVENTF_MOVE = 0x0001;
+
+    private const byte VK_SHIFT = 0x10;
+    private const uint KEYEVENTF_KEYUP = 0x0002;
 
     private const uint POWER_REQUEST_CONTEXT_VERSION = 0;
     private const uint POWER_REQUEST_CONTEXT_SIMPLE_STRING = 0x1;
@@ -253,14 +259,19 @@ public static class PowerHelper
 
     /// <summary>
     /// Activate display for slideshow: turn on, max brightness, prevent sleep + display off.
-    /// Uses mouse simulation for reliable wake on Modern Standby devices (e.g. Surface).
+    /// Uses mouse and keyboard simulation for reliable wake on Modern Standby devices (e.g. Surface).
+    /// Multiple attempts are made because Modern Standby displays may need time to respond.
     /// </summary>
     public static void ActivateDisplay()
     {
         PreventSleep();
-        TurnOnDisplay();
+
+        // On Modern Standby (e.g. Surface Go 2), SC_MONITORPOWER alone is unreliable.
+        // Use input simulation first — this is the most reliable way to wake the display.
         SimulateMouseMove();
+        SimulateKeyPress();
         TurnOnDisplay();
+
         SetBrightness(100);
     }
 
@@ -491,7 +502,7 @@ public static class PowerHelper
     /// Simulate a small mouse movement to wake display on Modern Standby devices.
     /// SC_MONITORPOWER alone is unreliable on Surface and other Modern Standby hardware.
     /// </summary>
-    private static void SimulateMouseMove()
+    public static void SimulateMouseMove()
     {
         var inputs = new INPUT[]
         {
@@ -508,6 +519,18 @@ public static class PowerHelper
         };
         SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
         Debug.WriteLine("[PowerHelper] Simulated wake mouse move (+1/-1) for display wake");
+    }
+
+    /// <summary>
+    /// Simulate a keyboard press/release (Shift key) to wake display on Modern Standby devices.
+    /// Some Modern Standby devices (e.g. Surface Go 2) respond more reliably to keyboard
+    /// input than mouse movement for waking the display.
+    /// </summary>
+    public static void SimulateKeyPress()
+    {
+        keybd_event(VK_SHIFT, 0, 0, UIntPtr.Zero);
+        keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        Debug.WriteLine("[PowerHelper] Simulated Shift key press/release for display wake");
     }
 
     private static bool TrySetBrightnessWmi(int percent)

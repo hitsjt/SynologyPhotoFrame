@@ -28,6 +28,7 @@ public partial class SlideshowViewModel : ViewModelBase
     private readonly HashSet<int> _loadedPhotoIds = new();
     private bool _isAdvancing;
     private bool _isRefreshing;
+    private int _activateRetryCount;
 
     [ObservableProperty]
     private BitmapImage? _currentImage;
@@ -433,6 +434,16 @@ public partial class SlideshowViewModel : ViewModelBase
                 PowerHelper.CancelScheduledWake();
                 PowerHelper.ClearExecutionRequired();
                 PowerHelper.ActivateDisplay();
+                // On Modern Standby (e.g. Surface Go 2), the display may not respond
+                // to the first activation attempt. Retry for several seconds.
+                _activateRetryCount = 5;
+            }
+            else if (_activateRetryCount > 0)
+            {
+                // Retry display activation — Modern Standby displays may need
+                // multiple attempts with delays to reliably turn on.
+                _activateRetryCount--;
+                PowerHelper.ActivateDisplay();
             }
         }
         else
@@ -486,10 +497,10 @@ public partial class SlideshowViewModel : ViewModelBase
             // Re-check schedule first — if it's now active period, activate display
             CheckSchedule();
 
-            // If still in inactive period, the display turned on during resume.
-            // Turn it back off.
             if (IsSchedulePaused)
             {
+                // Still in inactive period: the display turned on during resume.
+                // Turn it back off.
                 if (PowerHelper.IsModernStandby)
                 {
                     // On Modern Standby, call DeactivateDisplay to ensure
@@ -505,6 +516,14 @@ public partial class SlideshowViewModel : ViewModelBase
                     PowerHelper.SetBrightness(0);
                     PowerHelper.TurnOffDisplay();
                 }
+            }
+            else
+            {
+                // Active period after resume: ensure display is on.
+                // On Modern Standby (e.g. Surface Go 2), the display may not
+                // respond immediately after system resume.
+                _activateRetryCount = 5;
+                PowerHelper.ActivateDisplay();
             }
         });
     }
