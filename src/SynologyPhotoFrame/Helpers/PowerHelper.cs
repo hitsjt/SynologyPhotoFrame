@@ -276,6 +276,28 @@ public static class PowerHelper
     }
 
     /// <summary>
+    /// Aggressively wake the display from Modern Standby with multiple rapid attempts.
+    /// Designed to be called from a background thread (e.g. System.Threading.Timer callback).
+    /// On Surface Go 2 and similar Modern Standby devices, a single activation attempt
+    /// is often insufficient — the display may take several seconds to respond after DRIPS.
+    /// </summary>
+    public static void ForceWakeDisplay()
+    {
+        PreventSleep();
+
+        for (int i = 0; i < 5; i++)
+        {
+            SimulateMouseMove();
+            SimulateKeyPress();
+            TurnOnDisplay();
+            if (i < 4) Thread.Sleep(500);
+        }
+
+        SetBrightness(100);
+        Debug.WriteLine("[PowerHelper] ForceWakeDisplay completed (5 rapid attempts)");
+    }
+
+    /// <summary>
     /// Deactivate display for schedule off: dim to zero, turn off display, keep system awake.
     /// </summary>
     public static void DeactivateDisplay()
