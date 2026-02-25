@@ -109,6 +109,7 @@ public static class PowerHelper
 
     private const uint POWER_REQUEST_CONTEXT_VERSION = 0;
     private const uint POWER_REQUEST_CONTEXT_SIMPLE_STRING = 0x1;
+    private const int PowerRequestDisplayRequired = 1;
     private const int PowerRequestExecutionRequired = 3;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -121,6 +122,7 @@ public static class PowerHelper
     }
 
     private static IntPtr _executionRequestHandle = IntPtr.Zero;
+    private static IntPtr _displayRequestHandle = IntPtr.Zero;
 
     private static IntPtr _wakeTimerHandle = IntPtr.Zero;
     private static DateTime _scheduledWakeTime;
@@ -224,6 +226,55 @@ public static class PowerHelper
     }
 
     /// <summary>
+    /// Request that the display stays on using a formal PowerRequest.
+    /// On Modern Standby (e.g. Surface Go 2), this is the most reliable way to wake
+    /// and keep the display on — SendInput and SC_MONITORPOWER are unreliable because
+    /// the display subsystem filters software-generated input during low power states.
+    /// </summary>
+    public static void RequestDisplayOn()
+    {
+        if (_displayRequestHandle != IntPtr.Zero) return; // Already active
+
+        var context = new REASON_CONTEXT
+        {
+            Version = POWER_REQUEST_CONTEXT_VERSION,
+            Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING,
+            SimpleReasonString = "Photo frame display active"
+        };
+        _displayRequestHandle = PowerCreateRequest(ref context);
+        if (_displayRequestHandle == IntPtr.Zero || _displayRequestHandle == new IntPtr(-1))
+        {
+            _displayRequestHandle = IntPtr.Zero;
+            Debug.WriteLine("[PowerHelper] PowerCreateRequest for display failed");
+            return;
+        }
+
+        if (PowerSetRequest(_displayRequestHandle, PowerRequestDisplayRequired))
+        {
+            Debug.WriteLine("[PowerHelper] DisplayRequired set — display should turn on");
+        }
+        else
+        {
+            Debug.WriteLine("[PowerHelper] PowerSetRequest(DisplayRequired) failed");
+            CloseHandle(_displayRequestHandle);
+            _displayRequestHandle = IntPtr.Zero;
+        }
+    }
+
+    /// <summary>
+    /// Release the display-on power request, allowing the display to turn off.
+    /// </summary>
+    public static void ClearDisplayOn()
+    {
+        if (_displayRequestHandle == IntPtr.Zero) return;
+
+        PowerClearRequest(_displayRequestHandle, PowerRequestDisplayRequired);
+        CloseHandle(_displayRequestHandle);
+        _displayRequestHandle = IntPtr.Zero;
+        Debug.WriteLine("[PowerHelper] DisplayRequired cleared");
+    }
+
+    /// <summary>
     /// Turn on the display by sending SC_MONITORPOWER broadcast.
     /// </summary>
     public static void TurnOnDisplay()
@@ -259,15 +310,18 @@ public static class PowerHelper
 
     /// <summary>
     /// Activate display for slideshow: turn on, max brightness, prevent sleep + display off.
-    /// Uses mouse and keyboard simulation for reliable wake on Modern Standby devices (e.g. Surface).
-    /// Multiple attempts are made because Modern Standby displays may need time to respond.
+    /// Uses PowerRequestDisplayRequired as the primary mechanism for Modern Standby devices
+    /// (e.g. Surface Go 2), plus input simulation and SC_MONITORPOWER as fallbacks.
     /// </summary>
     public static void ActivateDisplay()
     {
         PreventSleep();
 
-        // On Modern Standby (e.g. Surface Go 2), SC_MONITORPOWER alone is unreliable.
-        // Use input simulation first — this is the most reliable way to wake the display.
+        // PowerRequestDisplayRequired is the most reliable way to wake the display
+        // on Modern Standby — SendInput is filtered during low power states.
+        RequestDisplayOn();
+
+        // Fallback: input simulation + SC_MONITORPOWER for non-Modern Standby systems
         SimulateMouseMove();
         SimulateKeyPress();
         TurnOnDisplay();
@@ -278,30 +332,44 @@ public static class PowerHelper
     /// <summary>
     /// Aggressively wake the display from Modern Standby with multiple rapid attempts.
     /// Designed to be called from a background thread (e.g. System.Threading.Timer callback).
-    /// On Surface Go 2 and similar Modern Standby devices, a single activation attempt
-    /// is often insufficient — the display may take several seconds to respond after DRIPS.
+    /// Uses PowerRequestDisplayRequired as the primary mechanism — on Surface Go 2 and
+    /// similar Modern Standby devices, SendInput is filtered during low power states,
+    /// so only a formal power request through the kernel power broker can reliably wake
+    /// the display from DRIPS.
     /// </summary>
     public static void ForceWakeDisplay()
     {
+        // PowerRequestDisplayRequired is the primary wake mechanism for Modern Standby.
+        // This works through the kernel power broker, bypassing the input filter that
+        // blocks SendInput/keybd_event during DRIPS on devices like Surface Go 2.
+        RequestDisplayOn();
         PreventSleep();
+
+        // Allow time for the display subsystem to respond to the power request
+        Thread.Sleep(500);
 
         for (int i = 0; i < 5; i++)
         {
+            // Fallback: input simulation + SC_MONITORPOWER
             SimulateMouseMove();
             SimulateKeyPress();
             TurnOnDisplay();
+            // Set brightness each iteration — display hardware may not be ready on first attempt
+            SetBrightness(100);
             if (i < 4) Thread.Sleep(500);
         }
 
-        SetBrightness(100);
         Debug.WriteLine("[PowerHelper] ForceWakeDisplay completed (5 rapid attempts)");
     }
 
     /// <summary>
     /// Deactivate display for schedule off: dim to zero, turn off display, keep system awake.
+    /// Clears the display power request so the display is allowed to turn off.
     /// </summary>
     public static void DeactivateDisplay()
     {
+        // Release display power request first so the display can turn off
+        ClearDisplayOn();
         // Must remove ES_DISPLAY_REQUIRED first so display can turn off
         PreventSleepKeepSystemOn();
         SetBrightness(0);

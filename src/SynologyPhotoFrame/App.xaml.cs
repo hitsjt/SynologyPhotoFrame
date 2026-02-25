@@ -48,6 +48,8 @@ public partial class App : Application
 
         PowerHelper.CancelScheduledWake();
         PowerHelper.ActivateDisplay();
+        PowerHelper.ClearDisplayOn();
+        PowerHelper.ClearExecutionRequired();
         PowerHelper.AllowSleep();
 
         (_serviceProvider as IDisposable)?.Dispose();
