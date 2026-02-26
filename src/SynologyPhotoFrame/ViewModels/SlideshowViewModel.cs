@@ -23,6 +23,7 @@ public partial class SlideshowViewModel : ViewModelBase
     private DispatcherTimer? _overlayTimer;
     private DispatcherTimer? _clockTimer;
     private DispatcherTimer? _refreshTimer;
+    private System.Threading.Timer? _scheduleBackupTimer;
     private AppSettings _settings = new();
     private readonly Random _random = Random.Shared;
     private readonly HashSet<int> _loadedPhotoIds = new();
@@ -399,6 +400,17 @@ public partial class SlideshowViewModel : ViewModelBase
             };
             _refreshTimer.Start();
         }
+
+        // Backup timer using System.Threading.Timer for Modern Standby devices.
+        // DispatcherTimer may not fire during low-power idle (DRIPS) on devices
+        // like Surface Go 2. A thread pool timer is more resilient.
+        if (_settings.ScheduleEnabled && PowerHelper.IsModernStandby)
+        {
+            _scheduleBackupTimer = new System.Threading.Timer(_ =>
+            {
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(CheckSchedule);
+            }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+        }
     }
 
     private void CheckSchedule()
@@ -408,6 +420,8 @@ public partial class SlideshowViewModel : ViewModelBase
             if (IsSchedulePaused)
             {
                 IsSchedulePaused = false;
+                PowerHelper.CancelScheduledWake();
+                PowerHelper.ClearExecutionRequired();
                 PowerHelper.ActivateDisplay();
             }
             return;
@@ -426,23 +440,54 @@ public partial class SlideshowViewModel : ViewModelBase
         {
             if (IsSchedulePaused)
             {
-                // Entering active period: restore full brightness
+                // Entering active period: restore full display
                 IsSchedulePaused = false;
-                PowerHelper.PreventSleep();
-                PowerHelper.SetBrightness(100);
+                PowerHelper.CancelScheduledWake();
+                PowerHelper.ClearExecutionRequired();
+                PowerHelper.ActivateDisplay();
             }
         }
         else
         {
             if (!IsSchedulePaused)
             {
-                // Entering inactive period: dim brightness, pause slideshow
+                // Entering inactive period
                 IsSchedulePaused = true;
-                PowerHelper.ClearDisplayOn();
-                PowerHelper.PreventSleepKeepSystemOn();
-                PowerHelper.SetBrightness(_settings.InactiveBrightness);
+
+                if (_settings.InactiveBrightness > 0)
+                {
+                    // Keep display on at low brightness — don't clear DisplayRequired
+                    PowerHelper.PreventSleep();
+                    PowerHelper.SetBrightness(_settings.InactiveBrightness);
+                }
+                else
+                {
+                    // Turn off display completely
+                    PowerHelper.DeactivateDisplay();
+                }
+
+                // On Modern Standby, keep process alive so timers fire for wake
+                if (PowerHelper.IsModernStandby)
+                {
+                    PowerHelper.RequestExecutionRequired();
+                }
+
+                // Schedule system wake for next active period start
+                var nextStart = CalculateNextStartTime(start);
+                PowerHelper.ScheduleSystemWake(nextStart);
             }
         }
+    }
+
+    /// <summary>
+    /// Calculate the next occurrence of the given time-of-day (schedule start time).
+    /// If the time hasn't passed yet today, returns today; otherwise returns tomorrow.
+    /// </summary>
+    private static DateTime CalculateNextStartTime(TimeSpan startTimeOfDay)
+    {
+        var now = DateTime.Now;
+        var todayStart = now.Date.Add(startTimeOfDay);
+        return now < todayStart ? todayStart : todayStart.AddDays(1);
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
@@ -454,7 +499,10 @@ public partial class SlideshowViewModel : ViewModelBase
         // Dispatch to UI thread since PowerModeChanged fires on a system thread
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
-            // Re-check schedule — adjusts brightness and pause state
+            // Re-check schedule — adjusts brightness and pause state.
+            // If we're now in the active period, CheckSchedule will call
+            // ActivateDisplay() which uses PowerRequestDisplayRequired +
+            // input simulation to reliably wake Modern Standby displays.
             CheckSchedule();
         });
     }
@@ -606,7 +654,12 @@ public partial class SlideshowViewModel : ViewModelBase
         _overlayTimer?.Stop();
         _clockTimer?.Stop();
         _refreshTimer?.Stop();
+        _scheduleBackupTimer?.Dispose();
+        _scheduleBackupTimer = null;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+
+        PowerHelper.CancelScheduledWake();
+        PowerHelper.ClearExecutionRequired();
 
         if (IsSchedulePaused)
         {
@@ -653,6 +706,23 @@ public partial class SlideshowViewModel : ViewModelBase
         else
         {
             _refreshTimer?.Stop();
+        }
+
+        // Update backup schedule timer for Modern Standby
+        if (newSettings.ScheduleEnabled && PowerHelper.IsModernStandby)
+        {
+            if (_scheduleBackupTimer == null)
+            {
+                _scheduleBackupTimer = new System.Threading.Timer(_ =>
+                {
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(CheckSchedule);
+                }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+            }
+        }
+        else
+        {
+            _scheduleBackupTimer?.Dispose();
+            _scheduleBackupTimer = null;
         }
 
         if (newSettings.ShufflePhotos && !wasShuffled && _displayOrder.Count > 0)
