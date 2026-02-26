@@ -404,13 +404,7 @@ public partial class SlideshowViewModel : ViewModelBase
         // Backup timer using System.Threading.Timer for Modern Standby devices.
         // DispatcherTimer may not fire during low-power idle (DRIPS) on devices
         // like Surface Go 2. A thread pool timer is more resilient.
-        if (_settings.ScheduleEnabled && PowerHelper.IsModernStandby)
-        {
-            _scheduleBackupTimer = new System.Threading.Timer(_ =>
-            {
-                System.Windows.Application.Current?.Dispatcher.BeginInvoke(CheckSchedule);
-            }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
-        }
+        EnsureBackupScheduleTimer();
     }
 
     private void CheckSchedule()
@@ -488,6 +482,31 @@ public partial class SlideshowViewModel : ViewModelBase
         var now = DateTime.Now;
         var todayStart = now.Date.Add(startTimeOfDay);
         return now < todayStart ? todayStart : todayStart.AddDays(1);
+    }
+
+    /// <summary>
+    /// Create or dispose the backup schedule timer based on current settings.
+    /// On Modern Standby, DispatcherTimer may not fire during DRIPS, so a
+    /// System.Threading.Timer provides a resilient fallback for schedule checks.
+    /// </summary>
+    private void EnsureBackupScheduleTimer()
+    {
+        if (_settings.ScheduleEnabled && PowerHelper.IsModernStandby)
+        {
+            if (_scheduleBackupTimer == null)
+            {
+                _scheduleBackupTimer = new System.Threading.Timer(_ =>
+                {
+                    var app = System.Windows.Application.Current;
+                    app?.Dispatcher.BeginInvoke(CheckSchedule);
+                }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+            }
+        }
+        else
+        {
+            _scheduleBackupTimer?.Dispose();
+            _scheduleBackupTimer = null;
+        }
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
@@ -709,21 +728,7 @@ public partial class SlideshowViewModel : ViewModelBase
         }
 
         // Update backup schedule timer for Modern Standby
-        if (newSettings.ScheduleEnabled && PowerHelper.IsModernStandby)
-        {
-            if (_scheduleBackupTimer == null)
-            {
-                _scheduleBackupTimer = new System.Threading.Timer(_ =>
-                {
-                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(CheckSchedule);
-                }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
-            }
-        }
-        else
-        {
-            _scheduleBackupTimer?.Dispose();
-            _scheduleBackupTimer = null;
-        }
+        EnsureBackupScheduleTimer();
 
         if (newSettings.ShufflePhotos && !wasShuffled && _displayOrder.Count > 0)
         {
