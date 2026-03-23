@@ -24,6 +24,8 @@ public partial class SlideshowViewModel : ViewModelBase
     private DispatcherTimer? _clockTimer;
     private DispatcherTimer? _refreshTimer;
     private System.Threading.Timer? _scheduleBackupTimer;
+    private System.Threading.Timer? _wakeRetryTimer;
+    private int _wakeRetryCount;
     private AppSettings _settings = new();
     private readonly Random _random = Random.Shared;
     private readonly HashSet<int> _loadedPhotoIds = new();
@@ -415,8 +417,9 @@ public partial class SlideshowViewModel : ViewModelBase
             {
                 IsSchedulePaused = false;
                 PowerHelper.CancelScheduledWake();
-                PowerHelper.ClearExecutionRequired();
                 PowerHelper.ActivateDisplay();
+                PowerHelper.ClearExecutionRequired();
+                CancelWakeRetries();
             }
             return;
         }
@@ -437,8 +440,25 @@ public partial class SlideshowViewModel : ViewModelBase
                 // Entering active period: restore full display
                 IsSchedulePaused = false;
                 PowerHelper.CancelScheduledWake();
+
+                // Activate display BEFORE clearing ExecutionRequired to avoid
+                // a race where PLM could suspend the process on Modern Standby.
+                if (PowerHelper.IsModernStandby)
+                {
+                    // On Modern Standby, the display subsystem may be in a deep
+                    // low-power state after DRIPS. ForceWakeDisplay retries 5 times
+                    // over ~3 seconds — run on background thread to avoid blocking UI.
+                    Task.Run(() => PowerHelper.ForceWakeDisplay());
+                    // Schedule additional retries in case the display hardware
+                    // needs more time to respond after exiting deep DRIPS.
+                    StartWakeRetries();
+                }
+                else
+                {
+                    PowerHelper.ActivateDisplay();
+                }
+
                 PowerHelper.ClearExecutionRequired();
-                PowerHelper.ActivateDisplay();
             }
         }
         else
@@ -509,21 +529,77 @@ public partial class SlideshowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Schedule repeated ForceWakeDisplay attempts over ~60 seconds.
+    /// On Modern Standby, the display hardware may take many seconds to fully
+    /// respond after exiting deep DRIPS. A single ForceWakeDisplay call (~3 seconds)
+    /// may not be enough — these retries provide extended coverage.
+    /// </summary>
+    private void StartWakeRetries()
+    {
+        CancelWakeRetries();
+        _wakeRetryCount = 0;
+
+        // Retry ForceWakeDisplay every 10 seconds, starting 5 seconds from now.
+        // Total coverage: initial ForceWakeDisplay (~3s) + retries at 5s, 15s, 25s, 35s, 45s, 55s.
+        _wakeRetryTimer = new System.Threading.Timer(_ =>
+        {
+            _wakeRetryCount++;
+            System.Diagnostics.Debug.WriteLine($"[Slideshow] Wake retry attempt {_wakeRetryCount}");
+            PowerHelper.ForceWakeDisplay();
+
+            if (_wakeRetryCount >= 6)
+            {
+                CancelWakeRetries();
+            }
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
+    }
+
+    private void CancelWakeRetries()
+    {
+        _wakeRetryTimer?.Dispose();
+        _wakeRetryTimer = null;
+        _wakeRetryCount = 0;
+    }
+
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
     {
         if (e.Mode != PowerModes.Resume) return;
 
         System.Diagnostics.Debug.WriteLine("[Slideshow] System resumed from sleep");
 
+        // On Modern Standby, immediately try aggressive display wake from the system
+        // thread — don't wait for UI thread dispatch which may be delayed during DRIPS.
+        // Only wake if schedule says we should be in the active period right now.
+        if (_settings.ScheduleEnabled && IsInActiveSchedulePeriod())
+        {
+            Task.Run(() => PowerHelper.ForceWakeDisplay());
+        }
+
         // Dispatch to UI thread since PowerModeChanged fires on a system thread
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
             // Re-check schedule — adjusts brightness and pause state.
-            // If we're now in the active period, CheckSchedule will call
-            // ActivateDisplay() which uses PowerRequestDisplayRequired +
-            // input simulation to reliably wake Modern Standby displays.
+            // If we're now in the active period, CheckSchedule will also
+            // activate the display and schedule extended wake retries.
             CheckSchedule();
         });
+    }
+
+    /// <summary>
+    /// Check if current time falls within the active schedule period.
+    /// Thread-safe — can be called from any thread.
+    /// </summary>
+    private bool IsInActiveSchedulePeriod()
+    {
+        if (!TimeSpan.TryParse(_settings.ScheduleStartTime, out var start) ||
+            !TimeSpan.TryParse(_settings.ScheduleEndTime, out var end))
+            return true; // Can't parse — assume active to be safe
+
+        var now = DateTime.Now.TimeOfDay;
+        return start <= end
+            ? now >= start && now < end
+            : now >= start || now < end;
     }
 
     [RelayCommand]
@@ -675,6 +751,7 @@ public partial class SlideshowViewModel : ViewModelBase
         _refreshTimer?.Stop();
         _scheduleBackupTimer?.Dispose();
         _scheduleBackupTimer = null;
+        CancelWakeRetries();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
 
         PowerHelper.CancelScheduledWake();
