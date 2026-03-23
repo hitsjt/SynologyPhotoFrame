@@ -417,9 +417,8 @@ public partial class SlideshowViewModel : ViewModelBase
             {
                 IsSchedulePaused = false;
                 PowerHelper.CancelScheduledWake();
-                PowerHelper.ActivateDisplay();
+                WakeDisplayForScheduleTransition();
                 PowerHelper.ClearExecutionRequired();
-                CancelWakeRetries();
             }
             return;
         }
@@ -443,20 +442,7 @@ public partial class SlideshowViewModel : ViewModelBase
 
                 // Activate display BEFORE clearing ExecutionRequired to avoid
                 // a race where PLM could suspend the process on Modern Standby.
-                if (PowerHelper.IsModernStandby)
-                {
-                    // On Modern Standby, the display subsystem may be in a deep
-                    // low-power state after DRIPS. ForceWakeDisplay retries 5 times
-                    // over ~3 seconds — run on background thread to avoid blocking UI.
-                    Task.Run(() => PowerHelper.ForceWakeDisplay());
-                    // Schedule additional retries in case the display hardware
-                    // needs more time to respond after exiting deep DRIPS.
-                    StartWakeRetries();
-                }
-                else
-                {
-                    PowerHelper.ActivateDisplay();
-                }
+                WakeDisplayForScheduleTransition();
 
                 PowerHelper.ClearExecutionRequired();
             }
@@ -538,17 +524,17 @@ public partial class SlideshowViewModel : ViewModelBase
     private void StartWakeRetries()
     {
         CancelWakeRetries();
-        _wakeRetryCount = 0;
+        Interlocked.Exchange(ref _wakeRetryCount, 0);
 
         // Retry ForceWakeDisplay every 10 seconds, starting 5 seconds from now.
         // Total coverage: initial ForceWakeDisplay (~3s) + retries at 5s, 15s, 25s, 35s, 45s, 55s.
         _wakeRetryTimer = new System.Threading.Timer(_ =>
         {
-            _wakeRetryCount++;
-            System.Diagnostics.Debug.WriteLine($"[Slideshow] Wake retry attempt {_wakeRetryCount}");
+            var count = Interlocked.Increment(ref _wakeRetryCount);
+            System.Diagnostics.Debug.WriteLine($"[Slideshow] Wake retry attempt {count}");
             PowerHelper.ForceWakeDisplay();
 
-            if (_wakeRetryCount >= 6)
+            if (count >= 6)
             {
                 CancelWakeRetries();
             }
@@ -557,9 +543,34 @@ public partial class SlideshowViewModel : ViewModelBase
 
     private void CancelWakeRetries()
     {
-        _wakeRetryTimer?.Dispose();
-        _wakeRetryTimer = null;
-        _wakeRetryCount = 0;
+        var timer = Interlocked.Exchange(ref _wakeRetryTimer, null);
+        timer?.Dispose();
+        Interlocked.Exchange(ref _wakeRetryCount, 0);
+    }
+
+    /// <summary>
+    /// Wake display when transitioning from schedule-paused to active.
+    /// On Modern Standby, uses aggressive multi-attempt wake with extended retries.
+    /// On traditional systems, uses a single ActivateDisplay call.
+    /// </summary>
+    private void WakeDisplayForScheduleTransition()
+    {
+        CancelWakeRetries();
+
+        if (PowerHelper.IsModernStandby)
+        {
+            // On Modern Standby, the display subsystem may be in a deep
+            // low-power state after DRIPS. ForceWakeDisplay retries 5 times
+            // over ~3 seconds — run on background thread to avoid blocking UI.
+            Task.Run(() => PowerHelper.ForceWakeDisplay());
+            // Schedule additional retries in case the display hardware
+            // needs more time to respond after exiting deep DRIPS.
+            StartWakeRetries();
+        }
+        else
+        {
+            PowerHelper.ActivateDisplay();
+        }
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
@@ -568,10 +579,14 @@ public partial class SlideshowViewModel : ViewModelBase
 
         System.Diagnostics.Debug.WriteLine("[Slideshow] System resumed from sleep");
 
+        // Capture settings reference — safe to read from system thread because
+        // reference assignment is atomic in .NET and AppSettings fields are immutable.
+        var settings = _settings;
+
         // On Modern Standby, immediately try aggressive display wake from the system
         // thread — don't wait for UI thread dispatch which may be delayed during DRIPS.
         // Only wake if schedule says we should be in the active period right now.
-        if (_settings.ScheduleEnabled && IsInActiveSchedulePeriod())
+        if (settings.ScheduleEnabled && IsInActiveSchedulePeriod())
         {
             Task.Run(() => PowerHelper.ForceWakeDisplay());
         }
